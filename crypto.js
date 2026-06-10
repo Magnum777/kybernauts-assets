@@ -112,6 +112,7 @@
         const decrypted = await window.decryptAssets(phrase);
         window.appData = decrypted;
         overlay.remove();
+        if (window.logVaultAccess) window.logVaultAccess();
         if (window.onVaultUnlocked) window.onVaultUnlocked(decrypted);
       } catch (e) {
         spinner.style.display = 'none';

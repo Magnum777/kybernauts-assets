@@ -17,12 +17,54 @@
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     padding: 20px;
     border-bottom: 2px solid #e67e22;
+    position: relative;
   }
   .header h1 {
     color: #f39c12;
     font-size: 24px;
     margin-bottom: 10px;
   }
+  .log-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: transparent;
+    border: 1px solid #e67e22;
+    color: #e67e22;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .log-btn:hover { background: rgba(230, 126, 34, 0.1); }
+  .log-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .log-modal.show { display: flex; }
+  .log-panel {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow: auto;
+    padding: 20px;
+  }
+  .log-panel h2 { color: #f39c12; margin-bottom: 15px; }
+  .log-entry {
+    border-bottom: 1px solid #222;
+    padding: 10px 0;
+    font-size: 13px;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time { color: #888; font-size: 11px; }
   .summary-bar {
     display: flex;
     gap: 30px;
@@ -331,7 +373,16 @@
 </head>
 <body>
 
+<!-- Logs Modal -->
+<div id="log-modal" class="log-modal" onclick="hideLogs(event)">
+  <div class="log-panel">
+    <h2>🔒 Vault Access Logs</h2>
+    <div id="log-entries"></div>
+  </div>
+</div>
+
 <div class="header">
+  <button class="log-btn" onclick="showLogs()">🔒 Logs</button>
   <h1>🗺️ EVE Assets Viewer</h1>
   <div style="color:#888;font-size:12px;margin-bottom:10px;" id="pricing-source"></div>
   <div class="summary-bar">
@@ -446,6 +497,79 @@ function formatIsk(n) {
 }
 function formatFullIsk(n) {
   return n.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' ISK';
+}
+
+// --- Vault Access Logging ---
+const LOG_KEY = 'vault_access_logs';
+
+async function logVaultAccess() {
+  try {
+    // Get IP + location from free API
+    const ipRes = await fetch('https://ipapi.co/json/');
+    const ipData = ipRes.ok ? await ipRes.json() : {};
+    
+    // Try browser geolocation (will prompt user)
+    let geoData = {};
+    if (navigator.geolocation) {
+      try {
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {timeout: 5000});
+        });
+        geoData = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        };
+      } catch(e) {
+        // User denied or unavailable
+      }
+    }
+    
+    const entry = {
+      time: new Date().toISOString(),
+      ip: ipData.ip || 'unknown',
+      city: ipData.city || '',
+      region: ipData.region || '',
+      country: ipData.country_name || '',
+      org: ipData.org || '',
+      lat: geoData.lat || null,
+      lon: geoData.lon || null,
+      ua: navigator.userAgent.split(' ').slice(-1)[0] || navigator.platform
+    };
+    
+    const logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+    logs.unshift(entry);
+    if (logs.length > 50) logs.pop(); // Keep last 50
+    localStorage.setItem(LOG_KEY, JSON.stringify(logs));
+  } catch(e) {
+    // Fail silently
+  }
+}
+
+function showLogs() {
+  const logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+  const container = document.getElementById('log-entries');
+  if (!logs.length) {
+    container.innerHTML = '<div style="color:#888;">No access logs yet.</div>';
+  } else {
+    container.innerHTML = logs.map(l => 
+      '<div class="log-entry">' +
+        '<div class="log-time">' + new Date(l.time).toLocaleString() + '</div>' +
+        '<div style="color:#ccc;">' +
+          '🌐 ' + l.ip + 
+          (l.city ? ' — ' + l.city + (l.region ? ', ' + l.region : '') : '') +
+          (l.country ? ' (' + l.country + ')' : '') +
+          (l.org ? ' · ' + l.org : '') +
+        '</div>' +
+        (l.lat !== null ? '<div style="color:#888; font-size:11px;">📍 ' + l.lat.toFixed(4) + ', ' + l.lon.toFixed(4) + ' (~' + Math.round(l.accuracy) + 'm)</div>' : '') +
+      '</div>'
+    ).join('');
+  }
+  document.getElementById('log-modal').classList.add('show');
+}
+
+function hideLogs(e) {
+  if (e.target.id === 'log-modal') document.getElementById('log-modal').classList.remove('show');
 }
 
 function renderCorpWallets(wallets) {
