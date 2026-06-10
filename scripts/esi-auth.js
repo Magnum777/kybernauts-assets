@@ -167,15 +167,24 @@ function decodeAccessToken(accessToken) {
   return JSON.parse(decoded);
 }
 
+// Extract numeric character ID from JWT "sub" field (format: CHARACTER:EVE:12345)
+function extractCharacterId(sub) {
+  const match = String(sub).match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
 // ESI character info — decode JWT instead of API call
 function getCharacterInfo(accessToken) {
   return new Promise((resolve, reject) => {
     try {
       const payload = decodeAccessToken(accessToken);
       console.log('  JWT payload keys:', Object.keys(payload));
+      const charId = extractCharacterId(payload.sub);
+      console.log('  Extracted char ID:', charId, 'from sub:', payload.sub);
+      if (!charId) throw new Error('Could not extract numeric char ID from sub: ' + payload.sub);
       // EVE SSO JWT contains: sub (char ID), name (char name), scp (scopes)
       resolve({
-        CharacterID: payload.sub,
+        CharacterID: charId,
         CharacterName: payload.name,
         Scopes: payload.scp || []
       });
