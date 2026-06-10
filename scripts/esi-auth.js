@@ -150,34 +150,54 @@ function exchangeCode(code, verifier) {
   });
 }
 
-// ESI character info
+// Decode JWT payload from access token (no API call needed)
+function decodeAccessToken(accessToken) {
+  const parts = accessToken.split('.');
+  if (parts.length !== 3) throw new Error('Invalid JWT format');
+  
+  // Base64url decode payload
+  const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padding = 4 - (payload.length % 4);
+  if (padding !== 4) {
+    const padded = payload + '='.repeat(padding);
+    const decoded = Buffer.from(padded, 'base64').toString('utf8');
+    return JSON.parse(decoded);
+  }
+  const decoded = Buffer.from(payload, 'base64').toString('utf8');
+  return JSON.parse(decoded);
+}
+
+// ESI character info — decode JWT instead of API call
 function getCharacterInfo(accessToken) {
   return new Promise((resolve, reject) => {
-    const req = https.request('https://esi.evetech.net/latest/verify/', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+    try {
+      const payload = decodeAccessToken(accessToken);
+      console.log('  JWT payload keys:', Object.keys(payload));
+      // EVE SSO JWT contains: sub (char ID), name (char name), scp (scopes)
+      resolve({
+        CharacterID: payload.sub,
+        CharacterName: payload.name,
+        Scopes: payload.scp || []
       });
-    });
-    req.on('error', reject);
-    req.end();
+    } catch (e) {
+      reject(new Error('JWT decode failed: ' + e.message));
+    }
   });
 }
 
 // ESI corp roles check
 function getCorpRoles(characterId, accessToken) {
   return new Promise((resolve, reject) => {
-    const req = https.request(
-      `https://esi.evetech.net/latest/characters/${characterId}/roles/`,
+    const rolesUrl = `https://esi.evetech.net/latest/characters/${characterId}/roles/`;
+    console.log('  Calling roles:', rolesUrl);
+    const req = https.request(rolesUrl,
       { headers: { 'Authorization': `Bearer ${accessToken}` } },
       (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+          console.log('  Roles status:', res.statusCode);
+          try { resolve(JSON.parse(data)); } catch (e) { reject(new Error(`Roles parse fail: ${e.message} — body: ${data.substring(0, 200)}`)); }
         });
       }
     );
