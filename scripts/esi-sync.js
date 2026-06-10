@@ -121,12 +121,10 @@ async function refreshAccessToken(refreshToken) {
     refresh_token: refreshToken,
     client_id: CLIENT_ID,
   }).toString();
-  const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
   return request(CONFIG.ESI_TOKEN_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${auth}`
+      'Content-Type': 'application/x-www-form-urlencoded'
     },
     body: postData
   });

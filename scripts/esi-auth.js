@@ -119,13 +119,10 @@ function exchangeCode(code, verifier) {
       code_verifier: verifier
     }).toString();
 
-    const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-
     const req = https.request(CONFIG.ESI_TOKEN_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${auth}`
+        'Content-Type': 'application/x-www-form-urlencoded'
       }
     }, (res) => {
       let data = '';
