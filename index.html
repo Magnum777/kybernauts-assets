@@ -344,8 +344,12 @@
       <span class="value" id="total-systems">0</span>
     </div>
     <div class="summary-item">
-      <span class="label">Total ISK:</span>
+      <span class="label">Asset Value:</span>
       <span class="value isk" id="total-isk">0</span>
+    </div>
+    <div class="summary-item">
+      <span class="label">Wallet ISK:</span>
+      <span class="value isk" id="total-wallet">0</span>
     </div>
     <div class="summary-item">
       <span class="label">Total Items:</span>
@@ -449,6 +453,7 @@ async function loadData(srcData) {
     document.getElementById('total-locations').textContent = data.summary.totalLocations.toLocaleString();
     document.getElementById('total-systems').textContent = data.summary.totalSystems.toLocaleString();
     document.getElementById('total-isk').textContent = formatIsk(data.summary.totalIsk) + ' ISK';
+    document.getElementById('total-wallet').textContent = formatIsk(data.summary.totalWalletIsk || 0) + ' ISK';
     document.getElementById('total-items').textContent = data.summary.totalItems.toLocaleString();
     if (data.summary.pricing) {
       const p = data.summary.pricing;
