@@ -592,6 +592,19 @@ function renderCorpWallets(wallets) {
   panel.innerHTML = html;
 }
 
+function formatContainer(container) {
+  if (!container) return '-';
+  if (container.includes('→')) {
+    const parts = container.split(' → ');
+    return parts.map((p, i) => {
+      const indent = '&nbsp;&nbsp;'.repeat(i);
+      const icon = i === 0 ? '📦' : i === parts.length - 1 ? '📍' : '📁';
+      return '<div style="white-space:nowrap;">' + indent + icon + ' ' + p + '</div>';
+    }).join('');
+  }
+  return '📦 ' + container;
+}
+
 async function loadData(srcData) {
   try {
     data = srcData || await (await fetch('data.json')).json();
@@ -792,13 +805,29 @@ function renderItems() {
   filtered.forEach(item => {
     const tr = document.createElement('tr');
     const techClass = item.tech === 'Tech II' ? 'tech-ii' : item.tech === 'Faction' ? 'tech-faction' : item.tech === 'Storyline' ? 'tech-storyline' : '';
+    
+    // Format container with parent chain visualization
+    let containerCell = '';
+    if (item.container) {
+      if (item.container.includes('→')) {
+        const parts = item.container.split(' → ');
+        parts.forEach((p, i) => {
+          const icon = i === 0 ? '📦' : i === parts.length - 1 ? '📍' : '📁';
+          const indent = '\u2003'.repeat(i);
+          containerCell += '<div style="white-space:nowrap; color:#888;">' + indent + icon + ' ' + p + '</div>';
+        });
+      } else {
+        containerCell = '<span class="container-tag">📦 ' + item.container + '</span>';
+      }
+    }
+    
     tr.innerHTML = `
       <td class="col-name"><span class="${techClass}">${item.name}</span></td>
       <td class="col-group">${item.group}</td>
       <td class="col-count count">${item.count.toLocaleString()}</td>
       <td class="col-value isk">${formatIsk(item.value)}</td>
       <td class="col-total isk">${formatIsk(item.totalValue)}</td>
-      <td class="col-container">${item.container ? '<span class="container-tag">' + item.container + '</span>' : ''}</td>
+      <td class="col-container">${containerCell}</td>
     `;
     tbody.appendChild(tr);
   });
