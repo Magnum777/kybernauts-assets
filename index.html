@@ -356,6 +356,7 @@
       <span class="value items" id="total-items">0</span>
     </div>
   </div>
+  <div id="wallet-panel" style="display:flex; gap:20px; flex-wrap:wrap; margin-top:10px; font-size:13px;"></div>
 </div>
 
 <div class="controls">
@@ -447,14 +448,37 @@ function formatFullIsk(n) {
   return n.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' ISK';
 }
 
+function renderCorpWallets(wallets) {
+  const panel = document.getElementById('wallet-panel');
+  if (!panel || !wallets || !wallets.length) return;
+  
+  let html = '';
+  wallets.forEach(corp => {
+    const corpName = corp.characterName || 'Corp ' + corp.corpId;
+    const total = corp.divisions.reduce((s, d) => s + d.balance, 0);
+    const divs = corp.divisions.map(d => 
+      'Div ' + d.division + ': ' + formatIsk(d.balance) + ' ISK'
+    ).join(' | ');
+    html += '<div style="background:#1a1a2e; padding:8px 12px; border-radius:6px; border:1px solid #333;">';
+    html += '<strong style="color:#f39c12;">' + corpName + '</strong>: ';
+    html += '<span style="color:#f1c40f; font-weight:bold;">' + formatIsk(total) + ' ISK</span>';
+    html += ' <span style="color:#888;">(' + divs + ')</span>';
+    html += '</div>';
+  });
+  panel.innerHTML = html;
+}
+
 async function loadData(srcData) {
   try {
     data = srcData || await (await fetch('data.json')).json();
     document.getElementById('total-locations').textContent = data.summary.totalLocations.toLocaleString();
     document.getElementById('total-systems').textContent = data.summary.totalSystems.toLocaleString();
-    document.getElementById('total-isk').textContent = formatIsk(data.summary.totalIsk) + ' ISK';
+    document.getElementById('total-isk').textContent = formatIsk(data.summary.totalAssetValue || data.summary.totalIsk || 0) + ' ISK';
     document.getElementById('total-wallet').textContent = formatIsk(data.summary.totalWalletIsk || 0) + ' ISK';
     document.getElementById('total-items').textContent = data.summary.totalItems.toLocaleString();
+    
+    // Render per-corp wallets
+    renderCorpWallets(data.wallets);
     if (data.summary.pricing) {
       const p = data.summary.pricing;
       document.getElementById('pricing-source').textContent = 'Prices: ' + p.source + ' | Priced: ' + p.pricedItems.toLocaleString() + ' | Fallback: ' + p.unpricedItems + ' | As of: ' + new Date(p.pricedAt).toLocaleDateString();
