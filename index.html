@@ -454,7 +454,7 @@ function renderCorpWallets(wallets) {
   
   let html = '';
   wallets.forEach(corp => {
-    const corpName = corp.characterName || 'Corp ' + corp.corpId;
+    const corpName = corp.corpName || corp.characterName || 'Corp ' + corp.corpId;
     const total = corp.divisions.reduce((s, d) => s + d.balance, 0);
     const divs = corp.divisions.map(d => 
       'Div ' + d.division + ': ' + formatIsk(d.balance) + ' ISK'
