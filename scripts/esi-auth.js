@@ -128,12 +128,18 @@ function exchangeCode(code, verifier) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        console.log('=== TOKEN RESPONSE DEBUG ===');
+        console.log('Status:', res.statusCode, res.statusMessage);
+        console.log('Headers:', JSON.stringify(res.headers, null, 2));
+        console.log('Body (first 1000 chars):', data.substring(0, 1000));
+        console.log('Body length:', data.length);
+        console.log('===========================');
         try {
           const json = JSON.parse(data);
           if (json.error) reject(new Error(json.error_description || json.error));
           else resolve(json);
         } catch (e) {
-          reject(new Error('Invalid token response: ' + data));
+          reject(new Error('Invalid token response (not JSON): ' + data.substring(0, 300)));
         }
       });
     });
