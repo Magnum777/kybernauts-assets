@@ -1,14 +1,5 @@
 (async function() {
-  const PASSPHRASE_HASH = '4869c7e8b7c9e7e5a8f3b2d1c0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0';
-  const SALT_HEX = 'deadbeef1234567890abcdef12345678';
-  
   const encoder = new TextEncoder();
-  
-  async function sha256(str) {
-    const buf = encoder.encode(str);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
-  }
   
   async function deriveKey(passphrase, salt) {
     const keyMaterial = await crypto.subtle.importKey(
@@ -26,19 +17,23 @@
     if (!resp.ok) throw new Error('Cannot fetch data');
     const data = new Uint8Array(await resp.arrayBuffer());
     
+    // Layout from Node.js crypto: salt(16) + nonce(12) + ciphertext(N) + tag(16)
     const salt = data.slice(0, 16);
     const nonce = data.slice(16, 28);
     const ciphertext = data.slice(28, data.length - 16);
     const tag = data.slice(data.length - 16);
     
-    const combined = new Uint8Array(nonce.length + ciphertext.length + tag.length);
-    combined.set(nonce, 0);
-    combined.set(ciphertext, nonce.length);
-    combined.set(tag, nonce.length + ciphertext.length);
+    // Web Crypto AES-GCM expects ciphertext + tag appended (NOT including nonce)
+    // The nonce goes in the iv field, not the ciphertext buffer
+    const ciphertextWithTag = new Uint8Array(ciphertext.length + tag.length);
+    ciphertextWithTag.set(ciphertext, 0);
+    ciphertextWithTag.set(tag, ciphertext.length);
     
     const key = await deriveKey(passphrase, salt);
     const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: nonce, tagLength: 128 }, key, combined
+      { name: 'AES-GCM', iv: nonce, tagLength: 128 },
+      key,
+      ciphertextWithTag
     );
     return JSON.parse(new TextDecoder('utf-8').decode(decrypted));
   }
@@ -90,8 +85,8 @@
       </style>
       <div class="gate-box">
         <div class="gate-icon">🔒</div>
-        <h2>Kybernauts Asset Vault</h2>
-        <p>Enter the 55-character passphrase to decrypt and view corp asset data.</p>
+        <h2>EVE Assets Viewer</h2>
+        <p>Enter the 55-character passphrase to decrypt and view asset data.</p>
         <div class="gate-spinner" id="gate-spinner"></div>
         <input type="password" id="gate-passphrase" placeholder="Enter passphrase..." autocomplete="off" maxlength="100">
         <button id="gate-unlock">Unlock Vault</button>
@@ -132,7 +127,6 @@
     input.focus();
   }
   
-  // Wait for DOM before building gate
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', buildGate);
   } else {
