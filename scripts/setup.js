@@ -73,10 +73,30 @@ function checkEnv() {
   
   const env = fs.readFileSync(envPath, 'utf8');
   const required = ['ESI_CLIENT_ID', 'ESI_CLIENT_SECRET', 'GITHUB_TOKEN', 'ENCRYPT_PASSPHRASE'];
-  const missing = required.filter(k => !env.includes(k + '=') || env.includes(k + '=_here') || env.includes(k + '=eat_') || env.includes(k + '=ghp_') || env.includes(k + '=your_'));
+  
+  // Extract actual values after each key
+  const getValue = (key) => {
+    const match = env.match(new RegExp(`^${key}=(.+)$`, 'm'));
+    return match ? match[1].trim() : '';
+  };
+  
+  const placeholders = [
+    'eat_your_client_id',
+    'eat_your_client_secret',
+    'ghp_your_github_token',
+    'your_55_char_passphrase',
+    'REPLACE_WITH'
+  ];
+  
+  const missing = required.filter(k => {
+    const val = getValue(k);
+    if (!val) return true;
+    // Check if value contains any placeholder pattern
+    return placeholders.some(p => val.includes(p));
+  });
   
   if (missing.length > 0) {
-    log(`❌ Missing values in .env: ${missing.join(', ')}`, RED);
+    log(`❌ Missing or placeholder values in .env: ${missing.join(', ')}`, RED);
     return false;
   }
   
