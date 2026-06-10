@@ -194,6 +194,24 @@ function getCharacterInfo(accessToken) {
   });
 }
 
+// ESI character public info (corporation_id, alliance_id, etc. — no auth needed)
+function getCharacterPublicInfo(characterId) {
+  return new Promise((resolve, reject) => {
+    const url = `https://esi.evetech.net/latest/characters/${characterId}/`;
+    console.log('  Calling public info:', url);
+    const req = https.request(url, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        console.log('  Public info status:', res.statusCode);
+        try { resolve(JSON.parse(data)); } catch (e) { reject(new Error(`Public info parse fail: ${e.message} — body: ${data.substring(0, 200)}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 // ESI corp roles check
 function getCorpRoles(characterId, accessToken) {
   return new Promise((resolve, reject) => {
@@ -262,6 +280,11 @@ const server = http.createServer(async (req, res) => {
       console.log('Getting character info...');
       const charInfo = await getCharacterInfo(tokenResponse.access_token);
       
+      console.log('Getting public character details...');
+      const publicInfo = await getCharacterPublicInfo(charInfo.CharacterID);
+      const corpId = publicInfo.corporation_id || null;
+      console.log('  Corp ID:', corpId, 'Name:', publicInfo.name);
+      
       console.log('Checking corp roles...');
       const roles = await getCorpRoles(charInfo.CharacterID, tokenResponse.access_token);
       
@@ -271,7 +294,7 @@ const server = http.createServer(async (req, res) => {
       tokens[charInfo.CharacterID] = {
         characterName: charInfo.CharacterName,
         characterId: charInfo.CharacterID,
-        corporationId: charInfo.CorporationID || (roles && roles.corporation_id) || null,
+        corporationId: corpId,
         hasDirector: hasDirector,
         refreshToken: tokenResponse.refresh_token,
         scopes: tokenResponse.scope || CONFIG.SCOPES,
