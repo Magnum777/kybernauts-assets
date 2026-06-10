@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVE Assets Viewer - Dotlan Map</title>
+<script src="crypto.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0a0a0a;
+    color: #ddd;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 20px;
+    border-bottom: 2px solid #e67e22;
+  }
+  .header h1 {
+    color: #f39c12;
+    font-size: 24px;
+    margin-bottom: 10px;
+  }
+  .summary-bar {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+  .summary-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .summary-item .label { color: #888; }
+  .summary-item .value {
+    color: #2ecc71;
+    font-weight: bold;
+    font-size: 16px;
+  }
+  .summary-item .value.isk { color: #f1c40f; }
+  .summary-item .value.items { color: #3498db; }
+
+  .controls {
+    padding: 15px 20px;
+    background: #111;
+    border-bottom: 1px solid #222;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .controls input, .controls select {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ddd;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .controls input { min-width: 250px; }
+  .controls input::placeholder { color: #666; }
+  .controls button {
+    background: #e67e22;
+    border: none;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  .controls button:hover { background: #d35400; }
+
+  .legend {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    font-size: 12px;
+    color: #888;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .map-grid {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+  }
+
+  .region-group {
+    background: #111;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #222;
+  }
+  .region-header {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f23);
+    padding: 10px 15px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #222;
+  }
+  .region-locations {
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+  }
+
+  .location-card {
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid #222;
+    position: relative;
+  }
+  .location-card:hover {
+    border-color: #e67e22;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(230,126,34,0.2);
+  }
+  .location-card .sec-dot {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2);
+  }
+  .location-card .loc-name {
+    font-size: 13px;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 4px;
+    padding-right: 20px;
+  }
+  .location-card .loc-system {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 6px;
+  }
+  .location-card .loc-system a {
+    color: #3498db;
+    text-decoration: none;
+  }
+  .location-card .loc-system a:hover {
+    text-decoration: underline;
+  }
+  .location-card .loc-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  .location-card .loc-value {
+    color: #f1c40f;
+    font-weight: bold;
+  }
+  .location-card .loc-count {
+    color: #3498db;
+  }
+
+  .detail-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1000;
+    overflow-y: auto;
+    display: none;
+  }
+  .detail-overlay.active { display: block; }
+
+  .detail-panel {
+    background: #0f0f0f;
+    max-width: 1200px;
+    margin: 20px auto;
+    border-radius: 8px;
+    border: 1px solid #333;
+    overflow: hidden;
+  }
+  .detail-header {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    border-bottom: 2px solid #e67e22;
+  }
+  .detail-header h2 {
+    color: #f39c12;
+    font-size: 20px;
+  }
+  .detail-header .detail-meta {
+    color: #888;
+    font-size: 14px;
+  }
+  .detail-header .detail-meta a {
+    color: #3498db;
+    text-decoration: none;
+  }
+  .back-btn {
+    background: #e67e22;
+    border: none;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  .back-btn:hover { background: #d35400; }
+
+  .detail-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+  .detail-controls input, .detail-controls select {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ddd;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .detail-controls input { min-width: 180px; }
+  .detail-controls input::placeholder { color: #666; }
+  .detail-filter-info {
+    color: #888;
+    font-size: 12px;
+    margin-left: 5px;
+  }
+    display: flex;
+    gap: 25px;
+    padding: 15px 20px;
+    background: #111;
+    border-bottom: 1px solid #222;
+    flex-wrap: wrap;
+  }
+  .detail-stat {
+    font-size: 14px;
+  }
+  .detail-stat .label { color: #888; }
+  .detail-stat .value {
+    color: #2ecc71;
+    font-weight: bold;
+    margin-left: 5px;
+  }
+  .detail-stat .value.isk { color: #f1c40f; }
+
+  .items-table-container {
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .items-table th {
+    background: #1a1a2e;
+    color: #aaa;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #333;
+    cursor: pointer;
+    user-select: none;
+  }
+  .items-table th:hover { color: #fff; }
+  .items-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    color: #ccc;
+  }
+  .items-table tr:hover td {
+    background: #151515;
+  }
+  .items-table .col-name { width: 35%; }
+  .items-table .col-group { width: 15%; }
+  .items-table .col-count { width: 8%; text-align: right; }
+  .items-table .col-value { width: 15%; text-align: right; }
+  .items-table .col-total { width: 15%; text-align: right; }
+  .items-table .col-container { width: 12%; }
+
+  .isk { color: #f1c40f; }
+  .count { color: #3498db; }
+  .container-tag {
+    background: #222;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #888;
+  }
+  .tech-ii { color: #e74c3c; font-weight: bold; }
+  .tech-faction { color: #9b59b6; font-weight: bold; }
+  .tech-storyline { color: #e67e22; font-weight: bold; }
+
+  .no-results {
+    padding: 60px;
+    text-align: center;
+    color: #666;
+    font-size: 16px;
+  }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #111; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #555; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🗺️ EVE Assets Viewer — Dotlan Map</h1>
+  <div style="color:#888;font-size:12px;margin-bottom:10px;" id="pricing-source"></div>
+  <div class="summary-bar">
+    <div class="summary-item">
+      <span class="label">Locations:</span>
+      <span class="value" id="total-locations">0</span>
+    </div>
+    <div class="summary-item">
+      <span class="label">Systems:</span>
+      <span class="value" id="total-systems">0</span>
+    </div>
+    <div class="summary-item">
+      <span class="label">Total ISK:</span>
+      <span class="value isk" id="total-isk">0</span>
+    </div>
+    <div class="summary-item">
+      <span class="label">Total Items:</span>
+      <span class="value items" id="total-items">0</span>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <input type="text" id="search-input" placeholder="Search location, system, region...">
+  <select id="security-filter">
+    <option value="all">All Security</option>
+    <option value="high">Highsec (0.5+)</option>
+    <option value="low">Lowsec (0.1-0.4)</option>
+    <option value="null">Nullsec (0.0)</option>
+    <option value="pochven">Pochven/Trig (0.0)</option>
+  </select>
+  <select id="sort-by">
+    <option value="value">Sort by Value</option>
+    <option value="name">Sort by Name</option>
+    <option value="count">Sort by Item Count</option>
+  </select>
+  <button onclick="renderMap()">Refresh</button>
+  <div class="legend">
+    <span><span class="legend-dot" style="background:#2ecc71"></span> Highsec</span>
+    <span><span class="legend-dot" style="background:#f1c40f"></span> Lowsec</span>
+    <span><span class="legend-dot" style="background:#e74c3c"></span> Null</span>
+    <span><span class="legend-dot" style="background:#e67e22"></span> Pochven</span>
+  </div>
+</div>
+
+<div id="map-container" class="map-grid"></div>
+
+<div id="detail-overlay" class="detail-overlay">
+  <div class="detail-panel">
+    <div class="detail-header">
+      <div>
+        <h2 id="detail-title">Location</h2>
+        <div class="detail-meta" id="detail-meta"></div>
+      </div>
+      <button class="back-btn" onclick="closeDetail()">← Back to Map</button>
+    </div>
+    <div class="detail-stats">
+      <div class="detail-stat"><span class="label">Items:</span><span class="value" id="detail-items">0</span></div>
+      <div class="detail-stat"><span class="label">Total Count:</span><span class="value count" id="detail-count">0</span></div>
+      <div class="detail-stat"><span class="label">Total Value:</span><span class="value isk" id="detail-value">0 ISK</span></div>
+      <div class="detail-controls">
+        <input type="text" id="detail-search" placeholder="Search items...">
+        <select id="detail-tech-filter">
+          <option value="all">All Tech</option>
+          <option value="Tech I">Tech I</option>
+          <option value="Tech II">Tech II</option>
+          <option value="Faction">Faction</option>
+          <option value="Storyline">Storyline</option>
+          <option value="Officer">Officer</option>
+          <option value="Deadspace">Deadspace</option>
+        </select>
+        <select id="detail-category-filter">
+          <option value="all">All Categories</option>
+        </select>
+        <span id="detail-filtered-count" class="detail-filter-info"></span>
+      </div>
+    </div>
+    <div class="items-table-container">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th class="col-name" onclick="sortItems('name')">Name ↕</th>
+            <th class="col-group" onclick="sortItems('group')">Group ↕</th>
+            <th class="col-count" onclick="sortItems('count')">Count ↕</th>
+            <th class="col-value" onclick="sortItems('value')">Unit Value ↕</th>
+            <th class="col-total" onclick="sortItems('totalValue')">Total Value ↕</th>
+            <th class="col-container">Container</th>
+          </tr>
+        </thead>
+        <tbody id="items-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let data = null;
+let currentItems = [];
+let itemSort = { field: 'totalValue', dir: 'desc' };
+
+function formatIsk(n) {
+  if (n >= 1e12) return (n/1e12).toFixed(2) + ' T';
+  if (n >= 1e9) return (n/1e9).toFixed(2) + ' B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + ' M';
+  if (n >= 1e3) return (n/1e3).toFixed(2) + ' K';
+  return n.toFixed(2);
+}
+function formatFullIsk(n) {
+  return n.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' ISK';
+}
+
+async function loadData(srcData) {
+  try {
+    data = srcData || await (await fetch('data.json')).json();
+    document.getElementById('total-locations').textContent = data.summary.totalLocations.toLocaleString();
+    document.getElementById('total-systems').textContent = data.summary.totalSystems.toLocaleString();
+    document.getElementById('total-isk').textContent = formatIsk(data.summary.totalIsk) + ' ISK';
+    document.getElementById('total-items').textContent = data.summary.totalItems.toLocaleString();
+    if (data.summary.pricing) {
+      const p = data.summary.pricing;
+      document.getElementById('pricing-source').textContent = 'Prices: ' + p.source + ' | Priced: ' + p.pricedItems.toLocaleString() + ' | Fallback: ' + p.unpricedItems + ' | As of: ' + new Date(p.pricedAt).toLocaleDateString();
+    }
+    renderMap();
+  } catch (e) {
+    document.getElementById('map-container').innerHTML = '<div class="no-results">Error loading data: ' + e.message + '</div>';
+  }
+}
+
+window.onVaultUnlocked = function(decrypted) {
+  loadData(decrypted);
+};
+
+function getSecurityClass(sec) {
+  if (sec >= 0.5) return 'high';
+  if (sec >= 0.1) return 'low';
+  if (sec > 0) return 'null';
+  return 'pochven';
+}
+
+function renderMap() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const secFilter = document.getElementById('security-filter').value;
+  const sortBy = document.getElementById('sort-by').value;
+
+  let locs = data.locations.filter(loc => {
+    if (search && !loc.name.toLowerCase().includes(search) && !loc.system.toLowerCase().includes(search) && !loc.region.toLowerCase().includes(search)) return false;
+    if (secFilter !== 'all' && getSecurityClass(loc.security) !== secFilter) return false;
+    return true;
+  });
+
+  if (sortBy === 'value') locs.sort((a,b) => b.totalValue - a.totalValue);
+  else if (sortBy === 'name') locs.sort((a,b) => a.name.localeCompare(b.name));
+  else if (sortBy === 'count') locs.sort((a,b) => b.itemCount - a.itemCount);
+
+  // Group by region
+  const byRegion = {};
+  locs.forEach(loc => {
+    const r = loc.region || 'Unknown';
+    if (!byRegion[r]) byRegion[r] = [];
+    byRegion[r].push(loc);
+  });
+
+  const container = document.getElementById('map-container');
+  if (locs.length === 0) {
+    container.innerHTML = '<div class="no-results">No locations match your filters.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  Object.keys(byRegion).sort().forEach(region => {
+    const group = document.createElement('div');
+    group.className = 'region-group';
+
+    const header = document.createElement('div');
+    header.className = 'region-header';
+    const regionTotal = byRegion[region].reduce((s,l) => s + l.totalValue, 0);
+    header.textContent = `${region} — ${byRegion[region].length} locations — ${formatIsk(regionTotal)} ISK`;
+    group.appendChild(header);
+
+    const inner = document.createElement('div');
+    inner.className = 'region-locations';
+
+    byRegion[region].forEach(loc => {
+      const card = document.createElement('div');
+      card.className = 'location-card';
+      card.onclick = () => openDetail(loc);
+
+      const dot = document.createElement('span');
+      dot.className = 'sec-dot';
+      dot.style.background = loc.securityHex;
+      card.appendChild(dot);
+
+      const name = document.createElement('div');
+      name.className = 'loc-name';
+      name.textContent = loc.name;
+      card.appendChild(name);
+
+      const sys = document.createElement('div');
+      sys.className = 'loc-system';
+      sys.innerHTML = `${loc.system} (Sec: ${loc.security.toFixed(1)}) — <a href="https://dotlan.evemaps.net/system/${encodeURIComponent(loc.system)}" target="_blank" onclick="event.stopPropagation()">Dotlan ↗</a>`;
+      card.appendChild(sys);
+
+      const stats = document.createElement('div');
+      stats.className = 'loc-stats';
+      stats.innerHTML = `<span class="loc-value">${formatIsk(loc.totalValue)} ISK</span><span class="loc-count">${loc.itemCount} items (${loc.totalCount.toLocaleString()})</span>`;
+      card.appendChild(stats);
+
+      inner.appendChild(card);
+    });
+
+    group.appendChild(inner);
+    container.appendChild(group);
+  });
+}
+
+function openDetail(loc) {
+  document.getElementById('detail-title').textContent = loc.name;
+  document.getElementById('detail-meta').innerHTML = `${loc.system} | ${loc.constellation} | ${loc.region} | Sec: ${loc.security.toFixed(1)} — <a href="https://dotlan.evemaps.net/system/${encodeURIComponent(loc.system)}" target="_blank">Dotlan ↗</a>`;
+  document.getElementById('detail-items').textContent = loc.itemCount.toLocaleString();
+  document.getElementById('detail-count').textContent = loc.totalCount.toLocaleString();
+  document.getElementById('detail-value').textContent = formatFullIsk(loc.totalValue);
+
+  currentItems = [...loc.items];
+  
+  // Populate category dropdown
+  const cats = [...new Set(loc.items.map(i => i.category).filter(Boolean))].sort();
+  const catSelect = document.getElementById('detail-category-filter');
+  catSelect.innerHTML = '<option value="all">All Categories</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  
+  document.getElementById('detail-search').value = '';
+  document.getElementById('detail-tech-filter').value = 'all';
+  document.getElementById('detail-category-filter').value = 'all';
+  
+  itemSort = { field: 'totalValue', dir: 'desc' };
+  renderItems();
+
+  document.getElementById('detail-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function sortItems(field, initial) {
+  if (!initial) {
+    if (itemSort.field === field) itemSort.dir = itemSort.dir === 'asc' ? 'desc' : 'asc';
+    else { itemSort.field = field; itemSort.dir = 'desc'; }
+  }
+  const dir = itemSort.dir === 'asc' ? 1 : -1;
+  currentItems.sort((a,b) => {
+    let av = a[field], bv = b[field];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+  renderItems();
+}
+
+function renderItems() {
+  const tbody = document.getElementById('items-body');
+  tbody.innerHTML = '';
+  
+  // Apply filters
+  const search = document.getElementById('detail-search').value.toLowerCase();
+  const techFilter = document.getElementById('detail-tech-filter').value;
+  const catFilter = document.getElementById('detail-category-filter').value;
+  
+  let filtered = currentItems;
+  if (search) {
+    filtered = filtered.filter(i => i.name.toLowerCase().includes(search) || i.group.toLowerCase().includes(search));
+  }
+  if (techFilter !== 'all') {
+    filtered = filtered.filter(i => i.tech === techFilter);
+  }
+  if (catFilter !== 'all') {
+    filtered = filtered.filter(i => i.category === catFilter);
+  }
+  
+  // Apply current sort
+  const dir = itemSort.dir === 'asc' ? 1 : -1;
+  filtered.sort((a,b) => {
+    let av = a[itemSort.field], bv = b[itemSort.field];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+  
+  // Update filtered count display
+  const filteredCount = filtered.length;
+  const totalFilteredValue = filtered.reduce((s, i) => s + i.totalValue, 0);
+  document.getElementById('detail-filtered-count').textContent = 
+    filteredCount !== currentItems.length ? `Showing ${filteredCount} of ${currentItems.length} — ${formatIsk(totalFilteredValue)} ISK` : '';
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No items match your filters.</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(item => {
+    const tr = document.createElement('tr');
+    const techClass = item.tech === 'Tech II' ? 'tech-ii' : item.tech === 'Faction' ? 'tech-faction' : item.tech === 'Storyline' ? 'tech-storyline' : '';
+    tr.innerHTML = `
+      <td class="col-name"><span class="${techClass}">${item.name}</span></td>
+      <td class="col-group">${item.group}</td>
+      <td class="col-count count">${item.count.toLocaleString()}</td>
+      <td class="col-value isk">${formatIsk(item.value)}</td>
+      <td class="col-total isk">${formatIsk(item.totalValue)}</td>
+      <td class="col-container">${item.container ? '<span class="container-tag">' + item.container + '</span>' : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('search-input').addEventListener('input', renderMap);
+document.getElementById('security-filter').addEventListener('change', renderMap);
+document.getElementById('sort-by').addEventListener('change', renderMap);
+document.getElementById('detail-search').addEventListener('input', renderItems);
+document.getElementById('detail-tech-filter').addEventListener('change', renderItems);
+document.getElementById('detail-category-filter').addEventListener('change', renderItems);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+loadData();
+</script>
+</body>
+</html>
