@@ -732,9 +732,10 @@
             <th class="col-region" onclick="sortStock('region')">Region ↕</th>
             <th class="col-system" onclick="sortStock('system')">System ↕</th>
             <th class="col-location" onclick="sortStock('station')">Station ↕</th>
-            <th class="col-count" onclick="sortStock('fitted')" style="text-align:right;">Fitted Ships ↕</th>
-            <th class="col-count" onclick="sortStock('unfitted')" style="text-align:right;">Unfitted Ships ↕</th>
-            <th class="col-count" onclick="sortStock('total')" style="text-align:right;">Total Ships ↕</th>
+            <th class="col-name" onclick="sortStock('ship')">Ship Name ↕</th>
+            <th class="col-group" onclick="sortStock('shipClass')">Class ↕</th>
+            <th class="col-count" onclick="sortStock('fitted')" style="text-align:right;">Fitted ↕</th>
+            <th class="col-count" onclick="sortStock('unfitted')" style="text-align:right;">Unfitted ↕</th>
           </tr>
         </thead>
         <tbody id="stock-body"></tbody>
@@ -1299,59 +1300,54 @@ document.addEventListener('keydown', e => {
 let stockData = [];
 let stockSort = { field: 'total', dir: 'desc' };
 
+function isShipGroup(group) {
+  if (!group) return false;
+  const shipGroups = [
+    'Frigate','Destroyer','Cruiser','Battlecruiser','Battleship',
+    'Industrial','Mining Barge','Transport','Freighter',
+    'Dreadnought','Carrier','Fighter','Corvette','Shuttle',
+    'Tactical Destroyer','Command Ship','Recon Ship','Force Recon',
+    'Stealth Bomber','Electronic Attack Ship','Heavy Assault Cruiser',
+    'Heavy Interdiction Cruiser','Logistics','Interceptor',
+    'Assault Frigate','Covert Ops','Strategic Cruiser',
+    'Flag Cruiser','Lancer','Attack Battlecruiser','Combat Battlecruiser'
+  ];
+  return shipGroups.some(g => group.includes(g));
+}
+
 function openStockView() {
   document.getElementById('stock-overlay').classList.add('active');
   document.body.style.overflow = 'hidden';
   document.getElementById('stock-search-input').focus();
   if (!data || !data.locations) return;
 
-  // Build stock data: count ships per station, split fitted vs unfitted
-  const byStation = {};
+  // Build per-ship-type rows: region|system|station|ship|class → fitted/unfitted
+  const byShip = {};
   data.locations.forEach(loc => {
     loc.items.forEach(item => {
-      // Check if item is a ship (category or group check)
-      const isShip = item.group && (
-        item.group.includes('Frigate') || item.group.includes('Destroyer') || item.group.includes('Cruiser') ||
-        item.group.includes('Battlecruiser') || item.group.includes('Battleship') || item.group.includes('Industrial') ||
-        item.group.includes('Mining Barge') || item.group.includes('Transport') || item.group.includes('Freighter') ||
-        item.group.includes('Dreadnought') || item.group.includes('Carrier') || item.group.includes('Fighter') ||
-        item.group.includes('Corvette') || item.group.includes('Shuttle') || item.group.includes('Yacht') ||
-        item.group.includes('Tactical Destroyer') || item.group.includes('Command Ship') ||
-        item.group.includes('Recon Ship') || item.group.includes('Force Recon') ||
-        item.group.includes('Stealth Bomber') || item.group.includes('Electronic Attack') ||
-        item.group.includes('Heavy Assault') || item.group.includes('Heavy Interdiction') ||
-        item.group.includes('Logistics') || item.group.includes('Interceptor') ||
-        item.group.includes('Assault Frigate') || item.group.includes('Covert Ops') ||
-        item.group.includes('Strategic Cruiser') || item.group.includes('Flag Cruiser') ||
-        item.group.includes('Lancer') || item.group.includes('Kikimora') || item.name.includes('Kikimora')
-      );
-      if (!isShip) return;
-
-      const key = `${loc.region || 'Unknown'}|${loc.system}|${loc.name}`;
-      if (!byStation[key]) {
-        byStation[key] = {
+      if (!isShipGroup(item.group)) return;
+      const key = `${loc.region || 'Unknown'}|${loc.system}|${loc.name}|${item.name}|${item.group || 'Unknown'}`;
+      if (!byShip[key]) {
+        byShip[key] = {
           region: loc.region || 'Unknown',
           system: loc.system,
           station: loc.name,
+          ship: item.name,
+          shipClass: item.group || 'Unknown',
           security: loc.security,
           fitted: 0,
           unfitted: 0,
           total: 0
         };
       }
-
-      // Fitted = has children (modules fitted)
       const hasModules = item.children && item.children.length > 0;
-      byStation[key].total += item.count;
-      if (hasModules) {
-        byStation[key].fitted += item.count;
-      } else {
-        byStation[key].unfitted += item.count;
-      }
+      byShip[key].total += item.count;
+      if (hasModules) byShip[key].fitted += item.count;
+      else byShip[key].unfitted += item.count;
     });
   });
 
-  stockData = Object.values(byStation).filter(s => s.total > 0);
+  stockData = Object.values(byShip).filter(s => s.total > 0);
   renderStockResults();
 }
 
@@ -1374,6 +1370,8 @@ function renderStockResults() {
   let filtered = stockData;
   if (search) {
     filtered = filtered.filter(s =>
+      s.ship.toLowerCase().includes(search) ||
+      s.shipClass.toLowerCase().includes(search) ||
       s.station.toLowerCase().includes(search) ||
       s.system.toLowerCase().includes(search) ||
       s.region.toLowerCase().includes(search)
@@ -1394,10 +1392,10 @@ function renderStockResults() {
   const totalUnfitted = filtered.reduce((s, r) => s + r.unfitted, 0);
   const totalShips = filtered.reduce((s, r) => s + r.total, 0);
   document.getElementById('stock-stats').textContent =
-    `${filtered.length} stations — ${totalShips.toLocaleString()} ships total (${totalFitted.toLocaleString()} fitted, ${totalUnfitted.toLocaleString()} unfitted)`;
+    `${filtered.length} rows — ${totalShips.toLocaleString()} ships total (${totalFitted.toLocaleString()} fitted, ${totalUnfitted.toLocaleString()} unfitted)`;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No ship stock data found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="no-results">No ship stock data found.</td></tr>';
     return;
   }
 
@@ -1408,9 +1406,10 @@ function renderStockResults() {
       <td class="col-region"><span style="color:${secColor};">●</span> ${s.region}</td>
       <td class="col-system"><a href="https://evemaps.dotlan.net/system/${encodeURIComponent(s.system)}" target="_blank" style="color:#aaa;text-decoration:none;">${s.system}</a></td>
       <td class="col-location">${s.station}</td>
+      <td class="col-name">${s.ship}</td>
+      <td class="col-group">${s.shipClass}</td>
       <td class="col-count" style="text-align:right; color:#2ecc71; font-weight:bold;">${s.fitted.toLocaleString()}</td>
       <td class="col-count" style="text-align:right; color:#e74c3c;">${s.unfitted.toLocaleString()}</td>
-      <td class="col-count" style="text-align:right; color:#f1c40f; font-weight:bold;">${s.total.toLocaleString()}</td>
     `;
     tbody.appendChild(tr);
   });
