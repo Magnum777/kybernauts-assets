@@ -24,10 +24,62 @@
     font-size: 24px;
     margin-bottom: 10px;
   }
+  .header-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .header-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .wallet-column {
+    min-width: 220px;
+    max-width: 300px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 12px;
+  }
+  .wallet-column h3 {
+    color: #f39c12;
+    font-size: 13px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+  }
+  .wallet-corp {
+    margin-bottom: 10px;
+  }
+  .wallet-corp-name {
+    color: #ddd;
+    font-weight: bold;
+    margin-bottom: 3px;
+  }
+  .wallet-division {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    color: #aaa;
+  }
+  .wallet-division .bal {
+    color: #f1c40f;
+    font-family: monospace;
+  }
+  .wallet-total {
+    border-top: 1px solid #333;
+    margin-top: 4px;
+    padding-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    color: #2ecc71;
+  }
   .log-btn {
     position: absolute;
     top: 20px;
-    right: 20px;
+    right: 340px;
     background: transparent;
     border: 1px solid #e67e22;
     color: #e67e22;
@@ -387,31 +439,38 @@
 
 <div class="header">
   <button class="log-btn" onclick="showLogs()">🔒 Logs</button>
-  <h1>🗺️ EVE Assets Viewer</h1>
-  <div style="color:#888;font-size:12px;margin-bottom:10px;" id="pricing-source"></div>
-  <div class="summary-bar">
-    <div class="summary-item">
-      <span class="label">Locations:</span>
-      <span class="value" id="total-locations">0</span>
+  <div class="header-layout">
+    <div class="header-main">
+      <h1>🗺️ EVE Assets Viewer</h1>
+      <div style="color:#888;font-size:12px;margin-bottom:10px;" id="pricing-source"></div>
+      <div class="summary-bar">
+        <div class="summary-item">
+          <span class="label">Locations:</span>
+          <span class="value" id="total-locations">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">Systems:</span>
+          <span class="value" id="total-systems">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">Asset Value:</span>
+          <span class="value isk" id="total-isk">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">Wallet ISK:</span>
+          <span class="value isk" id="total-wallet">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">Total Items:</span>
+          <span class="value items" id="total-items">0</span>
+        </div>
+      </div>
     </div>
-    <div class="summary-item">
-      <span class="label">Systems:</span>
-      <span class="value" id="total-systems">0</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Asset Value:</span>
-      <span class="value isk" id="total-isk">0</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Wallet ISK:</span>
-      <span class="value isk" id="total-wallet">0</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Total Items:</span>
-      <span class="value items" id="total-items">0</span>
+    <div class="wallet-column" id="wallet-column">
+      <h3>💰 Corp Wallets</h3>
+      <div style="color:#666;font-size:11px;">Loading...</div>
     </div>
   </div>
-  <div id="wallet-panel" style="display:flex; gap:20px; flex-wrap:wrap; margin-top:10px; font-size:13px;"></div>
 </div>
 
 <div class="controls">
@@ -551,6 +610,9 @@ async function logVaultAccess() {
 }
 
 function showLogs() {
+  const pwd = prompt('Enter logs password:');
+  if (pwd !== 'Kyb3r1') { alert('Wrong password.'); return; }
+  
   const logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
   const container = document.getElementById('log-entries');
   if (!logs.length) {
@@ -577,20 +639,30 @@ function hideLogs(e) {
 }
 
 function renderCorpWallets(wallets) {
-  const panel = document.getElementById('wallet-panel');
+  const panel = document.getElementById('wallet-column');
   if (!panel || !wallets || !wallets.length) return;
   
-  let html = '';
+  let html = '<h3>💰 Corp Wallets</h3>';
   wallets.forEach(corp => {
+    // Only divisions with ISK
+    const activeDivs = corp.divisions.filter(d => d.balance > 0);
+    if (activeDivs.length === 0) return;
+    
     const corpName = corp.corpName || corp.characterName || 'Corp ' + corp.corpId;
-    const total = corp.divisions.reduce((s, d) => s + d.balance, 0);
-    const divs = corp.divisions.map(d => 
-      'Div ' + d.division + ': ' + formatIsk(d.balance) + ' ISK'
-    ).join(' | ');
-    html += '<div style="background:#1a1a2e; padding:8px 12px; border-radius:6px; border:1px solid #333;">';
-    html += '<strong style="color:#f39c12;">' + corpName + '</strong>: ';
-    html += '<span style="color:#f1c40f; font-weight:bold;">' + formatIsk(total) + ' ISK</span>';
-    html += ' <span style="color:#888;">(' + divs + ')</span>';
+    const total = activeDivs.reduce((s, d) => s + d.balance, 0);
+    
+    html += '<div class="wallet-corp">';
+    html += '<div class="wallet-corp-name">' + corpName + '</div>';
+    activeDivs.forEach(d => {
+      html += '<div class="wallet-division">';
+      html += '<span>Div ' + d.division + '</span>';
+      html += '<span class="bal">' + formatIsk(d.balance) + '</span>';
+      html += '</div>';
+    });
+    html += '<div class="wallet-total">';
+    html += '<span>Total</span>';
+    html += '<span>' + formatIsk(total) + '</span>';
+    html += '</div>';
     html += '</div>';
   });
   panel.innerHTML = html;
