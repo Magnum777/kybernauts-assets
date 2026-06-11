@@ -79,7 +79,7 @@
   .log-btn {
     position: absolute;
     top: 20px;
-    right: 340px;
+    right: 20px;
     background: transparent;
     border: 1px solid #e67e22;
     color: #e67e22;
@@ -87,6 +87,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
+    z-index: 10;
   }
   .log-btn:hover { background: rgba(230, 126, 34, 0.1); }
   .log-modal {
@@ -523,7 +524,6 @@
 
 <div class="header">
   <button class="log-btn" onclick="showLogs()">🔒 Logs</button>
-  <button class="log-btn" style="right:90px;" onclick="openGlobalSearch()">🔍 Search Assets</button>
   <div class="header-layout">
     <div class="header-main">
       <h1>🗺️ EVE Assets Viewer</h1>
@@ -578,6 +578,7 @@
     <span><span class="legend-dot" style="background:#f1c40f"></span> Lowsec</span>
     <span><span class="legend-dot" style="background:#e74c3c"></span> Null</span>
     <span><span class="legend-dot" style="background:#e67e22"></span> Pochven</span>
+    <span style="margin-left:10px;"><button onclick="openGlobalSearch()" style="background:#e67e22;border:none;color:#fff;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;">🔍 Search Assets</button></span>
   </div>
 </div>
 
