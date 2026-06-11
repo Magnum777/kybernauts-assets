@@ -944,13 +944,13 @@ function renderCorpWallets(wallets) {
 
     let divsHtml = '';
     activeDivs.forEach(d => {
-      divsHtml += `<span>Div ${d.division}: <span style="color:#f1c40f;font-family:monospace;">${formatIsk(d.balance)}</span></span>`;
+      divsHtml += `<span style="color:#888;">Div ${d.division}: </span><span style="color:#00bfff;font-family:monospace;">${formatIsk(d.balance)}</span>`;
     });
 
     html += `<div class="wallet-corp-h">
       <span class="name">${corpName}</span>
       <span class="divs">${divsHtml}</span>
-      <span class="total">${formatIsk(total)}</span>
+      <span class="total" style="color:#1abc9c;">${formatIsk(total)}</span>
     </div>`;
   });
 
