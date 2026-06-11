@@ -718,7 +718,7 @@
 <div id="stock-overlay" class="global-overlay">
   <div class="global-panel">
     <div class="global-header">
-      <h2>📦 Ship Stock — Fitted vs Unfitted</h2>
+      <h2>📦 Ship Stock — Hull Counts by Location</h2>
       <button class="back-btn" onclick="closeStockView()">← Back to Map</button>
     </div>
     <div class="global-search-box">
@@ -732,10 +732,9 @@
             <th class="col-region" onclick="sortStock('region')">Region ↕</th>
             <th class="col-system" onclick="sortStock('system')">System ↕</th>
             <th class="col-location" onclick="sortStock('station')">Station ↕</th>
-            <th class="col-name" onclick="sortStock('ship')">Ship Name ↕</th>
+            <th class="col-name" onclick="sortStock('ship')">Ship Hull ↕</th>
             <th class="col-group" onclick="sortStock('shipClass')">Class ↕</th>
-            <th class="col-count" onclick="sortStock('fitted')" style="text-align:right;">Fitted ↕</th>
-            <th class="col-count" onclick="sortStock('unfitted')" style="text-align:right;">Unfitted ↕</th>
+            <th class="col-count" onclick="sortStock('total')" style="text-align:right;">Count ↕</th>
           </tr>
         </thead>
         <tbody id="stock-body"></tbody>
@@ -1321,33 +1320,28 @@ function openStockView() {
   document.getElementById('stock-search-input').focus();
   if (!data || !data.locations) return;
 
-  // Build per-ship-type rows: region|system|station|ship|class → fitted/unfitted
-  const byShip = {};
+  // Simple hull count per location
+  const rows = {};
   data.locations.forEach(loc => {
     loc.items.forEach(item => {
       if (!isShipGroup(item.group)) return;
       const key = `${loc.region || 'Unknown'}|${loc.system}|${loc.name}|${item.name}|${item.group || 'Unknown'}`;
-      if (!byShip[key]) {
-        byShip[key] = {
+      if (!rows[key]) {
+        rows[key] = {
           region: loc.region || 'Unknown',
           system: loc.system,
           station: loc.name,
           ship: item.name,
           shipClass: item.group || 'Unknown',
           security: loc.security,
-          fitted: 0,
-          unfitted: 0,
-          total: 0
+          count: 0
         };
       }
-      const hasModules = item.children && item.children.length > 0;
-      byShip[key].total += item.count;
-      if (hasModules) byShip[key].fitted += item.count;
-      else byShip[key].unfitted += item.count;
+      rows[key].count += item.count;
     });
   });
 
-  stockData = Object.values(byShip).filter(s => s.total > 0);
+  stockData = Object.values(rows);
   renderStockResults();
 }
 
@@ -1388,14 +1382,12 @@ function renderStockResults() {
     return 0;
   });
 
-  const totalFitted = filtered.reduce((s, r) => s + r.fitted, 0);
-  const totalUnfitted = filtered.reduce((s, r) => s + r.unfitted, 0);
-  const totalShips = filtered.reduce((s, r) => s + r.total, 0);
+  const totalShips = filtered.reduce((s, r) => s + r.count, 0);
   document.getElementById('stock-stats').textContent =
-    `${filtered.length} rows — ${totalShips.toLocaleString()} ships total (${totalFitted.toLocaleString()} fitted, ${totalUnfitted.toLocaleString()} unfitted)`;
+    `${filtered.length} rows — ${totalShips.toLocaleString()} hulls total`;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-results">No ship stock data found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No ship stock found.</td></tr>';
     return;
   }
 
@@ -1408,8 +1400,7 @@ function renderStockResults() {
       <td class="col-location">${s.station}</td>
       <td class="col-name">${s.ship}</td>
       <td class="col-group">${s.shipClass}</td>
-      <td class="col-count" style="text-align:right; color:#2ecc71; font-weight:bold;">${s.fitted.toLocaleString()}</td>
-      <td class="col-count" style="text-align:right; color:#e74c3c;">${s.unfitted.toLocaleString()}</td>
+      <td class="col-count" style="text-align:right; color:#f1c40f; font-weight:bold;">${s.count.toLocaleString()}</td>
     `;
     tbody.appendChild(tr);
   });
