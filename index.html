@@ -1309,7 +1309,13 @@ function isShipGroup(group) {
     'Stealth Bomber','Electronic Attack Ship','Heavy Assault Cruiser',
     'Heavy Interdiction Cruiser','Logistics','Interceptor',
     'Assault Frigate','Covert Ops','Strategic Cruiser',
-    'Flag Cruiser','Lancer','Attack Battlecruiser','Combat Battlecruiser'
+    'Flag Cruiser','Lancer','Attack Battlecruiser','Combat Battlecruiser',
+    'Combat Recon Ship','Logistics Cruiser','Heavy Interdiction',
+    'Elite Battleship','Black Ops','Marauder','Jump Freighter',
+    'Capital Industrial Ship','Supercarrier','Titan','Flagship',
+    'Combat Battlecruiser','Attack Battlecruiser','Force Recon Ship',
+    'Deep Space Transport','Blockade Runner','Exhumer','Prospect',
+    'Venture','Noctis','Orca','Rorqual','Bowhead'
   ];
   return shipGroups.some(g => group.includes(g));
 }
@@ -1320,26 +1326,34 @@ function openStockView() {
   document.getElementById('stock-search-input').focus();
   if (!data || !data.locations) return;
 
-  // Simple hull count per location
+  // Walk entire tree recursively to find ALL ships
   const rows = {};
-  data.locations.forEach(loc => {
-    loc.items.forEach(item => {
-      if (!isShipGroup(item.group)) return;
-      const key = `${loc.region || 'Unknown'}|${loc.system}|${loc.name}|${item.name}|${item.group || 'Unknown'}`;
-      if (!rows[key]) {
-        rows[key] = {
-          region: loc.region || 'Unknown',
-          system: loc.system,
-          station: loc.name,
-          ship: item.name,
-          shipClass: item.group || 'Unknown',
-          security: loc.security,
-          count: 0
-        };
+  function walkTree(nodes, loc, prefix) {
+    for (const item of nodes) {
+      // Check if this item is a ship (at any depth)
+      if (isShipGroup(item.group)) {
+        const key = `${loc.region || 'Unknown'}|${loc.system}|${loc.name}|${item.name}|${item.group || 'Unknown'}`;
+        if (!rows[key]) {
+          rows[key] = {
+            region: loc.region || 'Unknown',
+            system: loc.system,
+            station: loc.name,
+            ship: item.name,
+            shipClass: item.group || 'Unknown',
+            security: loc.security,
+            count: 0
+          };
+        }
+        rows[key].count += item.count;
       }
-      rows[key].count += item.count;
-    });
-  });
+      // Recurse into children (cargo holds, fitted ships, etc.)
+      if (item.children && item.children.length) {
+        walkTree(item.children, loc, prefix ? `${prefix} → ${item.name}` : item.name);
+      }
+    }
+  }
+
+  data.locations.forEach(loc => walkTree(loc.items, loc, ''));
 
   stockData = Object.values(rows);
   renderStockResults();
