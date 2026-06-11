@@ -364,7 +364,40 @@
     font-weight: bold;
     margin-left: 5px;
   }
-  .detail-stat .value.isk { color: #f1c40f; }
+  .expand-row td { padding: 0 !important; }
+  .expand-toggle {
+    padding: 6px 12px;
+    background: #1a1a2e;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #222;
+    transition: background 0.2s;
+  }
+  .expand-toggle:hover { background: #222; color: #aaa; }
+  .child-row { display: none; }
+  .child-row.show { display: table-row; }
+  .child-cell { padding: 0 !important; background: #0d0d0d; }
+  .child-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .child-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    color: #888;
+  }
+  .child-table .col-name { color: #ccc; }
+  .child-table .col-value, .child-table .col-total { font-family: monospace; }
+
+  .region-header a {
+    color: #e67e22;
+    text-decoration: none;
+    margin-left: 8px;
+    font-size: 11px;
+  }
+  .region-header a:hover { text-decoration: underline; }
 
   .items-table-container {
     padding: 20px;
@@ -750,7 +783,8 @@ function renderMap() {
     const header = document.createElement('div');
     header.className = 'region-header';
     const regionTotal = byRegion[region].reduce((s,l) => s + l.totalValue, 0);
-    header.textContent = `${region} — ${byRegion[region].length} locations — ${formatIsk(regionTotal)} ISK`;
+    header.innerHTML = `${region} — ${byRegion[region].length} locations — ${formatIsk(regionTotal)} ISK` +
+      (region !== 'Unknown' ? ` <a href="https://evemaps.dotlan.net/region/${encodeURIComponent(region)}" target="_blank" onclick="event.stopPropagation()">Dotlan ↗</a>` : '');
     group.appendChild(header);
 
     const inner = document.createElement('div');
@@ -773,7 +807,7 @@ function renderMap() {
 
       const sys = document.createElement('div');
       sys.className = 'loc-system';
-      sys.innerHTML = `${loc.system} (Sec: ${loc.security.toFixed(1)}) — <a href="https://dotlan.evemaps.net/system/${encodeURIComponent(loc.system)}" target="_blank" onclick="event.stopPropagation()">Dotlan ↗</a>`;
+      sys.innerHTML = `${loc.system} (Sec: ${loc.security.toFixed(1)}) — <a href="https://evemaps.dotlan.net/system/${encodeURIComponent(loc.system)}" target="_blank" onclick="event.stopPropagation()">Dotlan ↗</a>`;
       card.appendChild(sys);
 
       const stats = document.createElement('div');
@@ -791,7 +825,7 @@ function renderMap() {
 
 function openDetail(loc) {
   document.getElementById('detail-title').textContent = loc.name;
-  document.getElementById('detail-meta').innerHTML = `${loc.system} | ${loc.constellation} | ${loc.region} | Sec: ${loc.security.toFixed(1)} — <a href="https://dotlan.evemaps.net/system/${encodeURIComponent(loc.system)}" target="_blank">Dotlan ↗</a>`;
+  document.getElementById('detail-meta').innerHTML = `${loc.system} | ${loc.constellation} | ${loc.region} | Sec: ${loc.security.toFixed(1)} — <a href="https://evemaps.dotlan.net/system/${encodeURIComponent(loc.system)}" target="_blank">Dotlan ↗</a>` + (loc.region !== 'Unknown' ? ` | <a href="https://evemaps.dotlan.net/region/${encodeURIComponent(loc.region)}" target="_blank">Region ↗</a>` : '');
   document.getElementById('detail-items').textContent = loc.itemCount.toLocaleString();
   document.getElementById('detail-count').textContent = loc.totalCount.toLocaleString();
   document.getElementById('detail-value').textContent = formatFullIsk(loc.totalValue);
@@ -839,12 +873,12 @@ function sortItems(field, initial) {
 function renderItems() {
   const tbody = document.getElementById('items-body');
   tbody.innerHTML = '';
-  
+
   // Apply filters
   const search = document.getElementById('detail-search').value.toLowerCase();
   const techFilter = document.getElementById('detail-tech-filter').value;
   const catFilter = document.getElementById('detail-category-filter').value;
-  
+
   let filtered = currentItems;
   if (search) {
     filtered = filtered.filter(i => i.name.toLowerCase().includes(search) || i.group.toLowerCase().includes(search));
@@ -855,7 +889,7 @@ function renderItems() {
   if (catFilter !== 'all') {
     filtered = filtered.filter(i => i.category === catFilter);
   }
-  
+
   // Apply current sort
   const dir = itemSort.dir === 'asc' ? 1 : -1;
   filtered.sort((a,b) => {
@@ -866,46 +900,76 @@ function renderItems() {
     if (av > bv) return 1 * dir;
     return 0;
   });
-  
+
   // Update filtered count display
   const filteredCount = filtered.length;
   const totalFilteredValue = filtered.reduce((s, i) => s + i.totalValue, 0);
-  document.getElementById('detail-filtered-count').textContent = 
+  document.getElementById('detail-filtered-count').textContent =
     filteredCount !== currentItems.length ? `Showing ${filteredCount} of ${currentItems.length} — ${formatIsk(totalFilteredValue)} ISK` : '';
-  
+
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="no-results">No items match your filters.</td></tr>';
     return;
   }
-  
-  filtered.forEach(item => {
+
+  // Build tree: top-level items (no '→' in container) first, then nested items
+  const topLevel = filtered.filter(i => !i.container || !i.container.includes('→'));
+  const nested = filtered.filter(i => i.container && i.container.includes('→'));
+
+  // Render top-level items
+  topLevel.forEach(item => {
     const tr = document.createElement('tr');
+    tr.className = 'item-row';
     const techClass = item.tech === 'Tech II' ? 'tech-ii' : item.tech === 'Faction' ? 'tech-faction' : item.tech === 'Storyline' ? 'tech-storyline' : '';
-    
-    // Format container with parent chain visualization
-    let containerCell = '';
-    if (item.container) {
-      if (item.container.includes('→')) {
-        const parts = item.container.split(' → ');
-        parts.forEach((p, i) => {
-          const icon = i === 0 ? '📦' : i === parts.length - 1 ? '📍' : '📁';
-          const indent = '\u2003'.repeat(i);
-          containerCell += '<div style="white-space:nowrap; color:#888;">' + indent + icon + ' ' + p + '</div>';
-        });
-      } else {
-        containerCell = '<span class="container-tag">📦 ' + item.container + '</span>';
-      }
-    }
-    
+    const containerTag = item.container ? `<span class="container-tag">${item.container}</span>` : '';
+
     tr.innerHTML = `
       <td class="col-name"><span class="${techClass}">${item.name}</span></td>
       <td class="col-group">${item.group}</td>
       <td class="col-count count">${item.count.toLocaleString()}</td>
       <td class="col-value isk">${formatIsk(item.value)}</td>
       <td class="col-total isk">${formatIsk(item.totalValue)}</td>
-      <td class="col-container">${containerCell}</td>
+      <td class="col-container">${containerTag}</td>
     `;
     tbody.appendChild(tr);
+
+    // Find children of this item
+    const children = nested.filter(n => {
+      const parts = n.container.split(' → ');
+      return parts[0] === item.name || parts[parts.length - 2] === item.name;
+    });
+
+    if (children.length > 0) {
+      // Create expandable row for children
+      const expandRow = document.createElement('tr');
+      expandRow.className = 'expand-row';
+      expandRow.innerHTML = `<td colspan="6">
+        <div class="expand-toggle" onclick="this.parentElement.parentElement.nextElementSibling.classList.toggle('show')">
+          ▶ ${children.length} item${children.length > 1 ? 's' : ''} inside — ${formatIsk(children.reduce((s,c)=>s+c.totalValue,0))} ISK
+        </div>
+      </td>`;
+      tbody.appendChild(expandRow);
+
+      const childRow = document.createElement('tr');
+      childRow.className = 'child-row';
+      childRow.innerHTML = `<td colspan="6" class="child-cell">
+        <table class="child-table">
+          <tbody>${children.map(c => {
+            const cTech = c.tech === 'Tech II' ? 'tech-ii' : c.tech === 'Faction' ? 'tech-faction' : '';
+            const cContainer = c.container.split(' → ').slice(1).join(' → ');
+            return `<tr>
+              <td class="col-name"><span style="padding-left:20px;">└ <span class="${cTech}">${c.name}</span></span></td>
+              <td class="col-group">${c.group}</td>
+              <td class="col-count count">${c.count.toLocaleString()}</td>
+              <td class="col-value isk">${formatIsk(c.value)}</td>
+              <td class="col-total isk">${formatIsk(c.totalValue)}</td>
+              <td class="col-container"><span class="container-tag">${cContainer}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </td>`;
+      tbody.appendChild(childRow);
+    }
   });
 }
 
