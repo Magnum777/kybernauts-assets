@@ -995,20 +995,22 @@ window.onVaultUnlocked = function(decrypted) {
   loadData(decrypted);
 };
 
-function getSecurityClass(sec) {
+function getSecurityClass(sec, region) {
   const rounded = Math.ceil(sec * 10) / 10;
   if (rounded >= 0.5) return 'high';
   if (rounded >= 0.1) return 'low';
   if (rounded >= 0) return 'null';
-  return 'pochven';
+  if (region === 'Pochven') return 'pochven';
+  return 'null'; // negative sec outside Pochven = NPC null
 }
 
-function getSecurityColor(sec) {
+function getSecurityColor(sec, region) {
   const rounded = Math.ceil(sec * 10) / 10;
   if (rounded >= 0.5) return '#2ecc71';
   if (rounded >= 0.1) return '#f1c40f';
   if (rounded >= 0) return '#e74c3c';
-  return '#e67e22';
+  if (region === 'Pochven') return '#e67e22';
+  return '#e74c3c'; // negative sec outside Pochven = NPC null (red)
 }
 
 function renderMap() {
@@ -1023,7 +1025,7 @@ function renderMap() {
       if (secFilter === 'pochven') {
         if (loc.region !== 'Pochven') return false;
       } else {
-        if (getSecurityClass(loc.security) !== secFilter) return false;
+        if (getSecurityClass(loc.security, loc.region) !== secFilter) return false;
       }
     }
     return true;
@@ -1079,7 +1081,7 @@ function renderMap() {
     Object.keys(bySystem).sort().forEach(system => {
       const sysLocs = bySystem[system];
       const sec = sysLocs[0].security;
-      const secColor = getSecurityColor(sec);
+      const secColor = getSecurityColor(sec, sysLocs[0].region);
       
       // System header - collapsible
       const sysHeader = document.createElement('div');
