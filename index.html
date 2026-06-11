@@ -76,6 +76,46 @@
     font-weight: bold;
     color: #2ecc71;
   }
+  .wallet-bar {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #222;
+    font-size: 12px;
+  }
+  .wallet-corp-h {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 6px 10px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .wallet-corp-h .name {
+    color: #f39c12;
+    font-weight: bold;
+    border-right: 1px solid #333;
+    padding-right: 10px;
+  }
+  .wallet-corp-h .divs {
+    display: flex;
+    gap: 8px;
+    color: #888;
+  }
+  .wallet-corp-h .divs span {
+    color: #f1c40f;
+    font-family: monospace;
+  }
+  .wallet-corp-h .total {
+    color: #2ecc71;
+    font-weight: bold;
+    font-family: monospace;
+    border-left: 1px solid #333;
+    padding-left: 10px;
+  }
   .log-btn {
     position: absolute;
     top: 20px;
@@ -550,10 +590,7 @@
           <span class="value items" id="total-items">0</span>
         </div>
       </div>
-    </div>
-    <div class="wallet-column" id="wallet-column">
-      <h3>💰 Corp Wallets</h3>
-      <div style="color:#666;font-size:11px;">Loading...</div>
+      <div class="wallet-bar" id="wallet-bar"></div>
     </div>
   </div>
 </div>
@@ -754,33 +791,31 @@ function hideLogs(e) {
 }
 
 function renderCorpWallets(wallets) {
-  const panel = document.getElementById('wallet-column');
-  if (!panel || !wallets || !wallets.length) return;
-  
-  let html = '<h3>💰 Corp Wallets</h3>';
+  const bar = document.getElementById('wallet-bar');
+  if (!bar || !wallets || !wallets.length) return;
+
+  let html = '';
   wallets.forEach(corp => {
     // Only divisions with ISK
     const activeDivs = corp.divisions.filter(d => d.balance > 0);
     if (activeDivs.length === 0) return;
-    
+
     const corpName = corp.corpName || corp.characterName || 'Corp ' + corp.corpId;
     const total = activeDivs.reduce((s, d) => s + d.balance, 0);
-    
-    html += '<div class="wallet-corp">';
-    html += '<div class="wallet-corp-name">' + corpName + '</div>';
+
+    let divsHtml = '';
     activeDivs.forEach(d => {
-      html += '<div class="wallet-division">';
-      html += '<span>Div ' + d.division + '</span>';
-      html += '<span class="bal">' + formatIsk(d.balance) + '</span>';
-      html += '</div>';
+      divsHtml += `<span>Div ${d.division}: <span style="color:#f1c40f;font-family:monospace;">${formatIsk(d.balance)}</span></span>`;
     });
-    html += '<div class="wallet-total">';
-    html += '<span>Total</span>';
-    html += '<span>' + formatIsk(total) + '</span>';
-    html += '</div>';
-    html += '</div>';
+
+    html += `<div class="wallet-corp-h">
+      <span class="name">${corpName}</span>
+      <span class="divs">${divsHtml}</span>
+      <span class="total">${formatIsk(total)}</span>
+    </div>`;
   });
-  panel.innerHTML = html;
+
+  bar.innerHTML = html || '';
 }
 
 function formatContainer(container) {
