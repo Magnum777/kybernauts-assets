@@ -888,7 +888,7 @@ function formatContainer(container) {
 
 async function loadData(srcData) {
   try {
-    data = srcData || await (await fetch('data.json')).json();
+    data = srcData || await (await fetch('data.json?t=' + Date.now())).json();
     document.getElementById('total-locations').textContent = data.summary.totalLocations.toLocaleString();
     document.getElementById('total-systems').textContent = data.summary.totalSystems.toLocaleString();
     document.getElementById('total-isk').textContent = formatIsk(data.summary.totalAssetValue || data.summary.totalIsk || 0) + ' ISK';

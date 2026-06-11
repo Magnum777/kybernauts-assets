@@ -13,7 +13,7 @@
   }
   
   async function decryptAssets(passphrase) {
-    const resp = await fetch('data.enc');
+    const resp = await fetch('data.enc?t=' + Date.now());
     if (!resp.ok) throw new Error('Cannot fetch data');
     const data = new Uint8Array(await resp.arrayBuffer());
     
