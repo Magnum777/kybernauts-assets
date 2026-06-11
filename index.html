@@ -911,8 +911,15 @@ window.onVaultUnlocked = function(decrypted) {
 function getSecurityClass(sec) {
   if (sec >= 0.5) return 'high';
   if (sec >= 0.1) return 'low';
-  if (sec > 0) return 'null';
+  if (sec >= 0) return 'null';
   return 'pochven';
+}
+
+function getSecurityColor(sec) {
+  if (sec >= 0.5) return '#2ecc71';
+  if (sec >= 0.1) return '#f1c40f';
+  if (sec >= 0) return '#e74c3c';
+  return '#e67e22';
 }
 
 function renderMap() {
@@ -921,6 +928,7 @@ function renderMap() {
   const sortBy = document.getElementById('sort-by').value;
 
   let locs = data.locations.filter(loc => {
+    if (loc.totalValue === 0) return false;
     if (search && !loc.name.toLowerCase().includes(search) && !loc.system.toLowerCase().includes(search) && !loc.region.toLowerCase().includes(search)) return false;
     if (secFilter !== 'all' && getSecurityClass(loc.security) !== secFilter) return false;
     return true;
@@ -966,7 +974,7 @@ function renderMap() {
 
       const dot = document.createElement('span');
       dot.className = 'sec-dot';
-      dot.style.background = loc.securityHex;
+      dot.style.background = getSecurityColor(loc.security);
       card.appendChild(dot);
 
       const name = document.createElement('div');
