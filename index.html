@@ -542,6 +542,7 @@
   .global-results .items-table .col-name { width: 28%; }
   .global-results .items-table .col-location { width: 22%; }
   .global-results .items-table .col-region { width: 12%; }
+  .global-results .items-table .col-system { width: 15%; }
   .global-results .items-table .col-group { width: 12%; }
   .global-results .items-table .col-count { width: 8%; }
   .global-results .items-table .col-total { width: 18%; }
@@ -630,6 +631,7 @@
     <span><span class="legend-dot" style="background:#e74c3c"></span> Null</span>
     <span><span class="legend-dot" style="background:#e67e22"></span> Pochven</span>
     <span style="margin-left:10px;"><button onclick="openGlobalSearch()" style="background:#e67e22;border:none;color:#fff;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;">🔍 Search Assets</button></span>
+    <span><button onclick="openStockView()" style="background:#3498db;border:none;color:#fff;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;">📦 Stock</button></span>
   </div>
 </div>
 
@@ -707,6 +709,35 @@
           </tr>
         </thead>
         <tbody id="global-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Stock View: Fitted/Unfitted Ships by System/Station -->
+<div id="stock-overlay" class="global-overlay">
+  <div class="global-panel">
+    <div class="global-header">
+      <h2>📦 Ship Stock — Fitted vs Unfitted</h2>
+      <button class="back-btn" onclick="closeStockView()">← Back to Map</button>
+    </div>
+    <div class="global-search-box">
+      <input type="text" id="stock-search-input" placeholder="Search system or station...">
+      <div class="global-stats" id="stock-stats"></div>
+    </div>
+    <div class="global-results">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th class="col-region" onclick="sortStock('region')">Region ↕</th>
+            <th class="col-system" onclick="sortStock('system')">System ↕</th>
+            <th class="col-location" onclick="sortStock('station')">Station ↕</th>
+            <th class="col-count" onclick="sortStock('fitted')" style="text-align:right;">Fitted Ships ↕</th>
+            <th class="col-count" onclick="sortStock('unfitted')" style="text-align:right;">Unfitted Ships ↕</th>
+            <th class="col-count" onclick="sortStock('total')" style="text-align:right;">Total Ships ↕</th>
+          </tr>
+        </thead>
+        <tbody id="stock-body"></tbody>
       </table>
     </div>
   </div>
@@ -1255,12 +1286,135 @@ function renderGlobalResults() {
 }
 
 document.getElementById('global-search-input').addEventListener('input', renderGlobalResults);
+document.getElementById('stock-search-input').addEventListener('input', renderStockResults);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (document.getElementById('global-overlay').classList.contains('active')) closeGlobalSearch();
+    if (document.getElementById('stock-overlay').classList.contains('active')) closeStockView();
+    else if (document.getElementById('global-overlay').classList.contains('active')) closeGlobalSearch();
     else if (document.getElementById('detail-overlay').classList.contains('active')) closeDetail();
   }
 });
+
+// --- Stock View Functions ---
+let stockData = [];
+let stockSort = { field: 'total', dir: 'desc' };
+
+function openStockView() {
+  document.getElementById('stock-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('stock-search-input').focus();
+  if (!data || !data.locations) return;
+
+  // Build stock data: count ships per station, split fitted vs unfitted
+  const byStation = {};
+  data.locations.forEach(loc => {
+    loc.items.forEach(item => {
+      // Check if item is a ship (category or group check)
+      const isShip = item.group && (
+        item.group.includes('Frigate') || item.group.includes('Destroyer') || item.group.includes('Cruiser') ||
+        item.group.includes('Battlecruiser') || item.group.includes('Battleship') || item.group.includes('Industrial') ||
+        item.group.includes('Mining Barge') || item.group.includes('Transport') || item.group.includes('Freighter') ||
+        item.group.includes('Dreadnought') || item.group.includes('Carrier') || item.group.includes('Fighter') ||
+        item.group.includes('Corvette') || item.group.includes('Shuttle') || item.group.includes('Yacht') ||
+        item.group.includes('Tactical Destroyer') || item.group.includes('Command Ship') ||
+        item.group.includes('Recon Ship') || item.group.includes('Force Recon') ||
+        item.group.includes('Stealth Bomber') || item.group.includes('Electronic Attack') ||
+        item.group.includes('Heavy Assault') || item.group.includes('Heavy Interdiction') ||
+        item.group.includes('Logistics') || item.group.includes('Interceptor') ||
+        item.group.includes('Assault Frigate') || item.group.includes('Covert Ops') ||
+        item.group.includes('Strategic Cruiser') || item.group.includes('Flag Cruiser') ||
+        item.group.includes('Lancer') || item.group.includes('Kikimora') || item.name.includes('Kikimora')
+      );
+      if (!isShip) return;
+
+      const key = `${loc.region || 'Unknown'}|${loc.system}|${loc.name}`;
+      if (!byStation[key]) {
+        byStation[key] = {
+          region: loc.region || 'Unknown',
+          system: loc.system,
+          station: loc.name,
+          security: loc.security,
+          fitted: 0,
+          unfitted: 0,
+          total: 0
+        };
+      }
+
+      // Fitted = has children (modules fitted)
+      const hasModules = item.children && item.children.length > 0;
+      byStation[key].total += item.count;
+      if (hasModules) {
+        byStation[key].fitted += item.count;
+      } else {
+        byStation[key].unfitted += item.count;
+      }
+    });
+  });
+
+  stockData = Object.values(byStation).filter(s => s.total > 0);
+  renderStockResults();
+}
+
+function closeStockView() {
+  document.getElementById('stock-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function sortStock(field) {
+  if (stockSort.field === field) stockSort.dir = stockSort.dir === 'asc' ? 'desc' : 'asc';
+  else { stockSort.field = field; stockSort.dir = 'desc'; }
+  renderStockResults();
+}
+
+function renderStockResults() {
+  const search = document.getElementById('stock-search-input').value.toLowerCase();
+  const tbody = document.getElementById('stock-body');
+  tbody.innerHTML = '';
+
+  let filtered = stockData;
+  if (search) {
+    filtered = filtered.filter(s =>
+      s.station.toLowerCase().includes(search) ||
+      s.system.toLowerCase().includes(search) ||
+      s.region.toLowerCase().includes(search)
+    );
+  }
+
+  const dir = stockSort.dir === 'asc' ? 1 : -1;
+  filtered.sort((a, b) => {
+    let av = a[stockSort.field], bv = b[stockSort.field];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+
+  const totalFitted = filtered.reduce((s, r) => s + r.fitted, 0);
+  const totalUnfitted = filtered.reduce((s, r) => s + r.unfitted, 0);
+  const totalShips = filtered.reduce((s, r) => s + r.total, 0);
+  document.getElementById('stock-stats').textContent =
+    `${filtered.length} stations — ${totalShips.toLocaleString()} ships total (${totalFitted.toLocaleString()} fitted, ${totalUnfitted.toLocaleString()} unfitted)`;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No ship stock data found.</td></tr>';
+    return;
+  }
+
+  filtered.forEach(s => {
+    const tr = document.createElement('tr');
+    const secColor = s.security >= 0.5 ? '#2ecc71' : s.security >= 0.1 ? '#f1c40f' : s.security > 0 ? '#e74c3c' : '#e67e22';
+    tr.innerHTML = `
+      <td class="col-region"><span style="color:${secColor};">●</span> ${s.region}</td>
+      <td class="col-system"><a href="https://evemaps.dotlan.net/system/${encodeURIComponent(s.system)}" target="_blank" style="color:#aaa;text-decoration:none;">${s.system}</a></td>
+      <td class="col-location">${s.station}</td>
+      <td class="col-count" style="text-align:right; color:#2ecc71; font-weight:bold;">${s.fitted.toLocaleString()}</td>
+      <td class="col-count" style="text-align:right; color:#e74c3c;">${s.unfitted.toLocaleString()}</td>
+      <td class="col-count" style="text-align:right; color:#f1c40f; font-weight:bold;">${s.total.toLocaleString()}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
 loadData();
 </script>
