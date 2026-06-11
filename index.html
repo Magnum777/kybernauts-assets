@@ -263,32 +263,22 @@
   .location-card {
     background: #1a1a1a;
     border-radius: 6px;
-    padding: 12px;
+    padding: 10px 12px;
     cursor: pointer;
     transition: all 0.2s;
     border: 1px solid #222;
-    position: relative;
+    margin-left: 12px;
   }
   .location-card:hover {
     border-color: #e67e22;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(230,126,34,0.2);
-  }
-  .location-card .sec-dot {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(230,126,34,0.15);
   }
   .location-card .loc-name {
     font-size: 13px;
     font-weight: bold;
     color: #fff;
-    margin-bottom: 4px;
-    padding-right: 20px;
+    margin-bottom: 3px;
   }
   .location-card .loc-system {
     font-size: 11px;
@@ -313,6 +303,46 @@
   }
   .location-card .loc-count {
     color: #3498db;
+  }
+
+  .system-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #0f0f23;
+    border-radius: 4px;
+    border: 1px solid #1a1a2e;
+    margin-bottom: 2px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #aaa;
+    cursor: default;
+  }
+  .system-header .sys-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+  }
+  .system-header .sys-name a {
+    color: #aaa;
+    text-decoration: none;
+  }
+  .system-header .sys-name a:hover {
+    color: #e67e22;
+  }
+  .system-header .sys-sec {
+    color: #666;
+    font-size: 12px;
+    font-weight: normal;
+  }
+  .system-header .sys-count {
+    color: #666;
+    font-size: 11px;
+    font-weight: normal;
+    margin-left: auto;
   }
 
   .detail-overlay {
@@ -972,32 +1002,47 @@ function renderMap() {
     const inner = document.createElement('div');
     inner.className = 'region-locations';
 
+    // Group by system within region
+    const bySystem = {};
     byRegion[region].forEach(loc => {
-      const card = document.createElement('div');
-      card.className = 'location-card';
-      card.onclick = () => openDetail(loc);
+      if (!bySystem[loc.system]) bySystem[loc.system] = [];
+      bySystem[loc.system].push(loc);
+    });
 
-      const dot = document.createElement('span');
-      dot.className = 'sec-dot';
-      dot.style.background = getSecurityColor(loc.security);
-      card.appendChild(dot);
+    Object.keys(bySystem).sort().forEach(system => {
+      const sysLocs = bySystem[system];
+      const sec = sysLocs[0].security;
+      const secColor = getSecurityColor(sec);
+      
+      // System header with Dotlan link
+      const sysHeader = document.createElement('div');
+      sysHeader.className = 'system-header';
+      sysHeader.innerHTML = `
+        <span class="sys-dot" style="background:${secColor};"></span>
+        <span class="sys-name"><a href="https://evemaps.dotlan.net/system/${encodeURIComponent(system)}" target="_blank" onclick="event.stopPropagation()">${system}</a></span>
+        <span class="sys-sec">(${sec.toFixed(1)})</span>
+        <span class="sys-count">— ${sysLocs.length} station${sysLocs.length > 1 ? 's' : ''}</span>
+      `;
+      inner.appendChild(sysHeader);
 
-      const name = document.createElement('div');
-      name.className = 'loc-name';
-      name.textContent = loc.name;
-      card.appendChild(name);
+      // Station cards for this system
+      sysLocs.forEach(loc => {
+        const card = document.createElement('div');
+        card.className = 'location-card';
+        card.onclick = () => openDetail(loc);
 
-      const sys = document.createElement('div');
-      sys.className = 'loc-system';
-      sys.innerHTML = `${loc.system} (Sec: ${loc.security.toFixed(1)}) — <a href="https://evemaps.dotlan.net/system/${encodeURIComponent(loc.system)}" target="_blank" onclick="event.stopPropagation()">Dotlan ↗</a>`;
-      card.appendChild(sys);
+        const name = document.createElement('div');
+        name.className = 'loc-name';
+        name.textContent = loc.name;
+        card.appendChild(name);
 
-      const stats = document.createElement('div');
-      stats.className = 'loc-stats';
-      stats.innerHTML = `<span class="loc-value">${formatIsk(loc.totalValue)} ISK</span><span class="loc-count">${loc.itemCount} items (${loc.totalCount.toLocaleString()})</span>`;
-      card.appendChild(stats);
+        const stats = document.createElement('div');
+        stats.className = 'loc-stats';
+        stats.innerHTML = `<span class="loc-value">${formatIsk(loc.totalValue)} ISK</span><span class="loc-count">${loc.itemCount} items (${loc.totalCount.toLocaleString()})</span>`;
+        card.appendChild(stats);
 
-      inner.appendChild(card);
+        inner.appendChild(card);
+      });
     });
 
     group.appendChild(inner);
