@@ -546,6 +546,20 @@
   .global-results .items-table .col-count { width: 8%; }
   .global-results .items-table .col-total { width: 18%; }
 
+  .tree-toggle {
+    cursor: pointer;
+    color: #e67e22;
+    font-size: 11px;
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+    user-select: none;
+  }
+  .tree-toggle:hover { color: #f39c12; }
+  .tree-spacer { display: inline-block; width: 14px; }
+  .child-item td { background: #0f0f0f; }
+  .child-item .col-name { color: #bbb; }
+
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-track { background: #111; }
   ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
@@ -991,103 +1005,137 @@ function renderItems() {
   const tbody = document.getElementById('items-body');
   tbody.innerHTML = '';
 
-  // Apply filters
   const search = document.getElementById('detail-search').value.toLowerCase();
   const techFilter = document.getElementById('detail-tech-filter').value;
   const catFilter = document.getElementById('detail-category-filter').value;
 
-  let filtered = currentItems;
+  // Flatten for filtering but keep tree refs
+  const allNodes = [];
+  function collect(node, depth) {
+    const nodeWithDepth = { ...node, _depth: depth, _hasChildren: node.children && node.children.length > 0 };
+    allNodes.push(nodeWithDepth);
+    if (node.children) node.children.forEach(c => collect(c, depth + 1));
+  }
+  currentItems.forEach(n => collect(n, 0));
+
+  let filtered = allNodes;
   if (search) {
-    filtered = filtered.filter(i => i.name.toLowerCase().includes(search) || i.group.toLowerCase().includes(search));
+    // If searching, show ALL nodes that match + their ancestors (always visible)
+    const matches = new Set();
+    allNodes.forEach((n, idx) => {
+      if (n.name.toLowerCase().includes(search) || n.group.toLowerCase().includes(search)) {
+        matches.add(idx);
+        // Add all ancestors
+        let d = n._depth;
+        for (let i = idx - 1; i >= 0 && d > 0; i--) {
+          if (allNodes[i]._depth < d) {
+            matches.add(i);
+            d = allNodes[i]._depth;
+          }
+        }
+      }
+    });
+    filtered = allNodes.filter((_, i) => matches.has(i));
   }
   if (techFilter !== 'all') {
-    filtered = filtered.filter(i => i.tech === techFilter);
+    filtered = filtered.filter(n => n.tech === techFilter || n._hasChildren);
   }
   if (catFilter !== 'all') {
-    filtered = filtered.filter(i => i.category === catFilter);
+    filtered = filtered.filter(n => n.category === catFilter || n._hasChildren);
   }
 
-  // Apply current sort
+  // Apply current sort (only sort at each depth level)
   const dir = itemSort.dir === 'asc' ? 1 : -1;
-  filtered.sort((a,b) => {
-    let av = a[itemSort.field], bv = b[itemSort.field];
-    if (typeof av === 'string') av = av.toLowerCase();
-    if (typeof bv === 'string') bv = bv.toLowerCase();
-    if (av < bv) return -1 * dir;
-    if (av > bv) return 1 * dir;
-    return 0;
-  });
+  function sortLevel(nodes) {
+    nodes.sort((a, b) => {
+      let av = a[itemSort.field], bv = b[itemSort.field];
+      if (typeof av === 'string') av = av.toLowerCase();
+      if (typeof bv === 'string') bv = bv.toLowerCase();
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    for (const n of nodes) {
+      if (n.children) sortLevel(n.children);
+    }
+  }
 
-  // Update filtered count display
-  const filteredCount = filtered.length;
-  const totalFilteredValue = filtered.reduce((s, i) => s + i.totalValue, 0);
+  const totalValue = filtered.reduce((s, i) => s + (i._depth === 0 ? i.totalValue : 0), 0);
+  const topCount = filtered.filter(n => n._depth === 0).length;
   document.getElementById('detail-filtered-count').textContent =
-    filteredCount !== currentItems.length ? `Showing ${filteredCount} of ${currentItems.length} — ${formatIsk(totalFilteredValue)} ISK` : '';
+    filtered.length !== allNodes.length ? `Showing ${filtered.length} of ${allNodes.length} items — ${formatIsk(totalValue)} ISK` : '';
 
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="no-results">No items match your filters.</td></tr>';
     return;
   }
 
-  // Build tree: top-level items (no '→' in container) first, then nested items
-  const topLevel = filtered.filter(i => !i.container || !i.container.includes('→'));
-  const nested = filtered.filter(i => i.container && i.container.includes('→'));
+  // Render recursively with expand/collapse
+  const visible = new Set(filtered.map((_, i) => i)); // all filtered visible
+  let rowIndex = 0;
 
-  // Render top-level items
-  topLevel.forEach(item => {
+  function renderNode(node, index, parentExpanded) {
     const tr = document.createElement('tr');
     tr.className = 'item-row';
-    const techClass = item.tech === 'Tech II' ? 'tech-ii' : item.tech === 'Faction' ? 'tech-faction' : item.tech === 'Storyline' ? 'tech-storyline' : '';
-    const containerTag = item.container ? `<span class="container-tag">${item.container}</span>` : '';
+    if (node._depth > 0) tr.classList.add('child-item');
+    if (!parentExpanded && node._depth > 0) tr.style.display = 'none';
+
+    const techClass = node.tech === 'Tech II' ? 'tech-ii' : node.tech === 'Faction' ? 'tech-faction' : node.tech === 'Storyline' ? 'tech-storyline' : '';
+    const indent = '\u2003\u2003'.repeat(node._depth);
+    const toggle = node._hasChildren ? `<span class="tree-toggle" data-idx="${index}" onclick="toggleTree(this)">▶</span> ` : '<span class="tree-spacer"></span> ';
+
+    let flagLabel = '';
+    if (node._depth === 0 && node.flagName && node.flagName !== node.name) {
+      flagLabel = `<span style="color:#666;font-size:11px;">[${node.flagName}]</span> `;
+    }
 
     tr.innerHTML = `
-      <td class="col-name"><span class="${techClass}">${item.name}</span></td>
-      <td class="col-group">${item.group}</td>
-      <td class="col-count count">${item.count.toLocaleString()}</td>
-      <td class="col-value isk">${formatIsk(item.value)}</td>
-      <td class="col-total isk">${formatIsk(item.totalValue)}</td>
-      <td class="col-container">${containerTag}</td>
+      <td class="col-name">${indent}${toggle}${flagLabel}<span class="${techClass}">${node.name}</span></td>
+      <td class="col-group">${node.group}</td>
+      <td class="col-count count">${node.count.toLocaleString()}</td>
+      <td class="col-value isk">${formatIsk(node.value)}</td>
+      <td class="col-total isk">${formatIsk(node.totalValue)}</td>
+      <td class="col-container"><span class="container-tag">${node.children ? node.children.length + ' items' : '-'}</span></td>
     `;
     tbody.appendChild(tr);
 
-    // Find children of this item
-    const children = nested.filter(n => {
-      const parts = n.container.split(' → ');
-      return parts[0] === item.name || parts[parts.length - 2] === item.name;
-    });
-
-    if (children.length > 0) {
-      // Create expandable row for children
-      const expandRow = document.createElement('tr');
-      expandRow.className = 'expand-row';
-      expandRow.innerHTML = `<td colspan="6">
-        <div class="expand-toggle" onclick="this.parentElement.parentElement.nextElementSibling.classList.toggle('show')">
-          ▶ ${children.length} item${children.length > 1 ? 's' : ''} inside — ${formatIsk(children.reduce((s,c)=>s+c.totalValue,0))} ISK
-        </div>
-      </td>`;
-      tbody.appendChild(expandRow);
-
-      const childRow = document.createElement('tr');
-      childRow.className = 'child-row';
-      childRow.innerHTML = `<td colspan="6" class="child-cell">
-        <table class="child-table">
-          <tbody>${children.map(c => {
-            const cTech = c.tech === 'Tech II' ? 'tech-ii' : c.tech === 'Faction' ? 'tech-faction' : '';
-            const cContainer = c.container.split(' → ').slice(1).join(' → ');
-            return `<tr>
-              <td class="col-name"><span style="padding-left:20px;">└ <span class="${cTech}">${c.name}</span></span></td>
-              <td class="col-group">${c.group}</td>
-              <td class="col-count count">${c.count.toLocaleString()}</td>
-              <td class="col-value isk">${formatIsk(c.value)}</td>
-              <td class="col-total isk">${formatIsk(c.totalValue)}</td>
-              <td class="col-container"><span class="container-tag">${cContainer}</span></td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </td>`;
-      tbody.appendChild(childRow);
+    if (node.children && node.children.length) {
+      const isExpanded = node._depth === 0; // auto-expand top level
+      node.children.forEach((child, ci) => renderNode(child, index + '-' + ci, isExpanded));
     }
-  });
+  }
+
+  // Only render top-level items; children rendered recursively
+  const topNodes = filtered.filter(n => n._depth === 0);
+  topNodes.forEach((node, i) => renderNode(node, i, true));
+}
+
+// Toggle tree expand/collapse
+function toggleTree(el) {
+  const idx = el.dataset.idx;
+  const expanded = el.textContent === '▼';
+  el.textContent = expanded ? '▶' : '▼';
+  // Find all rows that belong to this parent
+  const rows = document.querySelectorAll('#items-body tr');
+  let inSubtree = false;
+  let parentDepth = null;
+  for (const row of rows) {
+    const nameCell = row.querySelector('.col-name');
+    if (!nameCell) continue;
+    if (nameCell.querySelector(`[data-idx="${idx}"]`)) {
+      inSubtree = true;
+      parentDepth = (nameCell.textContent.match(/\u2003/g) || []).length;
+      continue;
+    }
+    if (inSubtree) {
+      const depth = (nameCell.textContent.match(/\u2003/g) || []).length;
+      if (depth <= parentDepth) {
+        inSubtree = false;
+        continue;
+      }
+      row.style.display = expanded ? 'none' : '';
+    }
+  }
 }
 
 // --- Global Asset Search ---
