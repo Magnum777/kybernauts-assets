@@ -1048,7 +1048,7 @@ function renderMap() {
 
     // Region header - collapsible
     const header = document.createElement('div');
-    header.className = 'region-header';
+    header.className = 'region-header collapsed';
     const regionTotal = byRegion[region].reduce((s,l) => s + l.totalValue, 0);
     header.innerHTML = `
       <span>${region} — ${byRegion[region].length} locations — ${formatIsk(regionTotal)} ISK</span>
@@ -1061,7 +1061,7 @@ function renderMap() {
     group.appendChild(header);
 
     const inner = document.createElement('div');
-    inner.className = 'region-locations';
+    inner.className = 'region-locations collapsed';
 
     // Group by system within region
     const bySystem = {};
@@ -1077,7 +1077,7 @@ function renderMap() {
       
       // System header - collapsible
       const sysHeader = document.createElement('div');
-      sysHeader.className = 'system-header';
+      sysHeader.className = 'system-header collapsed';
       sysHeader.innerHTML = `
         <span class="sys-toggle">▼</span>
         <span class="sys-dot" style="background:${secColor};"></span>
@@ -1088,7 +1088,7 @@ function renderMap() {
       
       // Stations wrapper
       const stationsWrap = document.createElement('div');
-      stationsWrap.className = 'system-stations';
+      stationsWrap.className = 'system-stations collapsed';
       
       // Station cards
       sysLocs.forEach(loc => {
