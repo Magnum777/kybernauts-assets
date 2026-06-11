@@ -132,9 +132,10 @@
 
   .map-grid {
     padding: 20px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 15px;
+    align-items: flex-start;
   }
 
   .region-group {
@@ -142,6 +143,9 @@
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid #222;
+    flex: 1 1 300px;
+    min-width: 280px;
+    max-width: 380px;
   }
   .region-header {
     background: linear-gradient(135deg, #1a1a2e, #0f0f23);
@@ -155,8 +159,8 @@
   }
   .region-locations {
     padding: 10px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
 
