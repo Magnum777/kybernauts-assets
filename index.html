@@ -1001,6 +1001,8 @@ function sortItems(field, initial) {
   renderItems();
 }
 
+let treeExpanded = new Set(); // paths of expanded nodes
+
 function renderItems() {
   const tbody = document.getElementById('items-body');
   tbody.innerHTML = '';
@@ -1009,133 +1011,134 @@ function renderItems() {
   const techFilter = document.getElementById('detail-tech-filter').value;
   const catFilter = document.getElementById('detail-category-filter').value;
 
-  // Flatten for filtering but keep tree refs
-  const allNodes = [];
-  function collect(node, depth) {
-    const nodeWithDepth = { ...node, _depth: depth, _hasChildren: node.children && node.children.length > 0 };
-    allNodes.push(nodeWithDepth);
-    if (node.children) node.children.forEach(c => collect(c, depth + 1));
+  // Flatten tree with paths
+  const flat = [];
+  function walk(nodes, path, depth) {
+    for (let i = 0; i < nodes.length; i++) {
+      const p = path ? `${path}-${i}` : `${i}`;
+      const node = { ...nodes[i], _path: p, _depth: depth, _hasChildren: nodes[i].children && nodes[i].children.length > 0 };
+      flat.push(node);
+      if (nodes[i].children) walk(nodes[i].children, p, depth + 1);
+    }
   }
-  currentItems.forEach(n => collect(n, 0));
+  walk(currentItems, '', 0);
 
-  let filtered = allNodes;
+  // Filter
+  let filtered = flat;
   if (search) {
-    // If searching, show ALL nodes that match + their ancestors (always visible)
-    const matches = new Set();
-    allNodes.forEach((n, idx) => {
+    const matchIdx = new Set();
+    flat.forEach((n, i) => {
       if (n.name.toLowerCase().includes(search) || n.group.toLowerCase().includes(search)) {
-        matches.add(idx);
-        // Add all ancestors
-        let d = n._depth;
-        for (let i = idx - 1; i >= 0 && d > 0; i--) {
-          if (allNodes[i]._depth < d) {
-            matches.add(i);
-            d = allNodes[i]._depth;
-          }
+        matchIdx.add(i);
+        // Ancestors must be visible
+        const parts = n._path.split('-');
+        for (let j = 1; j < parts.length; j++) {
+          const ancPath = parts.slice(0, j).join('-');
+          const ancIdx = flat.findIndex(x => x._path === ancPath);
+          if (ancIdx >= 0) matchIdx.add(ancIdx);
         }
       }
     });
-    filtered = allNodes.filter((_, i) => matches.has(i));
+    filtered = flat.filter((_, i) => matchIdx.has(i));
   }
   if (techFilter !== 'all') {
-    filtered = filtered.filter(n => n.tech === techFilter || n._hasChildren);
+    filtered = filtered.filter(n => n.tech === techFilter || (n._hasChildren && n._depth === 0));
   }
   if (catFilter !== 'all') {
-    filtered = filtered.filter(n => n.category === catFilter || n._hasChildren);
+    filtered = filtered.filter(n => n.category === catFilter || (n._hasChildren && n._depth === 0));
   }
 
-  // Apply current sort (only sort at each depth level)
-  const dir = itemSort.dir === 'asc' ? 1 : -1;
-  function sortLevel(nodes) {
-    nodes.sort((a, b) => {
-      let av = a[itemSort.field], bv = b[itemSort.field];
-      if (typeof av === 'string') av = av.toLowerCase();
-      if (typeof bv === 'string') bv = bv.toLowerCase();
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
-    });
-    for (const n of nodes) {
-      if (n.children) sortLevel(n.children);
-    }
-  }
-
-  const totalValue = filtered.reduce((s, i) => s + (i._depth === 0 ? i.totalValue : 0), 0);
-  const topCount = filtered.filter(n => n._depth === 0).length;
+  const totalValue = filtered.filter(n => n._depth === 0).reduce((s, n) => s + n.totalValue, 0);
   document.getElementById('detail-filtered-count').textContent =
-    filtered.length !== allNodes.length ? `Showing ${filtered.length} of ${allNodes.length} items — ${formatIsk(totalValue)} ISK` : '';
+    filtered.length !== flat.length ? `Showing ${filtered.length} of ${flat.length} items — ${formatIsk(totalValue)} ISK` : '';
 
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="no-results">No items match your filters.</td></tr>';
     return;
   }
 
-  // Render recursively with expand/collapse
-  const visible = new Set(filtered.map((_, i) => i)); // all filtered visible
-  let rowIndex = 0;
+  // Which paths are in the filtered set
+  const filteredPaths = new Set(filtered.map(n => n._path));
+  // Which paths should be visible (filtered + children of expanded filtered parents)
+  const visiblePaths = new Set(filteredPaths);
 
-  function renderNode(node, index, parentExpanded) {
-    const tr = document.createElement('tr');
-    tr.className = 'item-row';
-    if (node._depth > 0) tr.classList.add('child-item');
-    if (!parentExpanded && node._depth > 0) tr.style.display = 'none';
-
-    const techClass = node.tech === 'Tech II' ? 'tech-ii' : node.tech === 'Faction' ? 'tech-faction' : node.tech === 'Storyline' ? 'tech-storyline' : '';
-    const indent = '\u2003\u2003'.repeat(node._depth);
-    const toggle = node._hasChildren ? `<span class="tree-toggle" data-idx="${index}" onclick="toggleTree(this)">▶</span> ` : '<span class="tree-spacer"></span> ';
-
-    let flagLabel = '';
-    if (node._depth === 0 && node.flagName && node.flagName !== node.name) {
-      flagLabel = `<span style="color:#666;font-size:11px;">[${node.flagName}]</span> `;
-    }
-
-    tr.innerHTML = `
-      <td class="col-name">${indent}${toggle}${flagLabel}<span class="${techClass}">${node.name}</span></td>
-      <td class="col-group">${node.group}</td>
-      <td class="col-count count">${node.count.toLocaleString()}</td>
-      <td class="col-value isk">${formatIsk(node.value)}</td>
-      <td class="col-total isk">${formatIsk(node.totalValue)}</td>
-      <td class="col-container"><span class="container-tag">${node.children ? node.children.length + ' items' : '-'}</span></td>
-    `;
-    tbody.appendChild(tr);
-
-    if (node.children && node.children.length) {
-      const isExpanded = node._depth === 0; // auto-expand top level
-      node.children.forEach((child, ci) => renderNode(child, index + '-' + ci, isExpanded));
+  for (const n of filtered) {
+    if (n._hasChildren && treeExpanded.has(n._path)) {
+      // Add all descendants of expanded nodes that are in the flat list
+      flat.filter(x => x._path.startsWith(n._path + '-')).forEach(x => visiblePaths.add(x._path));
     }
   }
 
-  // Only render top-level items; children rendered recursively
-  const topNodes = filtered.filter(n => n._depth === 0);
-  topNodes.forEach((node, i) => renderNode(node, i, true));
+  // Sort top-level items
+  const dir = itemSort.dir === 'asc' ? 1 : -1;
+  const topItems = [...currentItems].sort((a, b) => {
+    let av = a[itemSort.field], bv = b[itemSort.field];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+
+  // Build lookup by path from sorted tree (add _depth to originals)
+  const nodeByPath = new Map();
+  function indexTree(nodes, prefix, depth) {
+    for (let i = 0; i < nodes.length; i++) {
+      const p = prefix ? `${prefix}-${i}` : `${i}`;
+      const enriched = { ...nodes[i], _path: p, _depth: depth, _hasChildren: nodes[i].children && nodes[i].children.length > 0 };
+      nodeByPath.set(p, enriched);
+      if (nodes[i].children) indexTree(nodes[i].children, p, depth + 1);
+    }
+  }
+  indexTree(topItems, '', 0);
+
+  // Render visible nodes in order
+  function renderOrdered(nodes, prefix) {
+    for (let i = 0; i < nodes.length; i++) {
+      const p = prefix ? `${prefix}-${i}` : `${i}`;
+      if (!visiblePaths.has(p)) continue;
+      const node = nodeByPath.get(p);
+      if (!node) continue;
+
+      const tr = document.createElement('tr');
+      tr.className = 'item-row';
+      tr.dataset.path = p;
+      if (node._depth > 0) tr.classList.add('child-item');
+
+      const techClass = node.tech === 'Tech II' ? 'tech-ii' : node.tech === 'Faction' ? 'tech-faction' : node.tech === 'Storyline' ? 'tech-storyline' : '';
+      const indent = '\u2003\u2003'.repeat(node._depth);
+      const expanded = treeExpanded.has(p);
+      const toggle = node._hasChildren
+        ? `<span class="tree-toggle" data-path="${p}" onclick="toggleTree('${p}')">${expanded ? '▼' : '▶'}</span> `
+        : '<span class="tree-spacer"></span> ';
+
+      let flagLabel = '';
+      if (node.flagName && node.flagName !== node.name) {
+        flagLabel = `<span style="color:#666;font-size:11px;">[${node.flagName}]</span> `;
+      }
+
+      tr.innerHTML = `
+        <td class="col-name">${indent}${toggle}${flagLabel}<span class="${techClass}">${node.name}</span></td>
+        <td class="col-group">${node.group}</td>
+        <td class="col-count count">${node.count.toLocaleString()}</td>
+        <td class="col-value isk">${formatIsk(node.value)}</td>
+        <td class="col-total isk">${formatIsk(node.totalValue)}</td>
+        <td class="col-container"><span class="container-tag">${node.children && node.children.length ? node.children.length + ' items' : '-'}</span></td>
+      `;
+      tbody.appendChild(tr);
+
+      if (node.children && expanded) {
+        renderOrdered(node.children, p);
+      }
+    }
+  }
+  renderOrdered(topItems, '');
 }
 
-// Toggle tree expand/collapse
-function toggleTree(el) {
-  const idx = el.dataset.idx;
-  const expanded = el.textContent === '▼';
-  el.textContent = expanded ? '▶' : '▼';
-  // Find all rows that belong to this parent
-  const rows = document.querySelectorAll('#items-body tr');
-  let inSubtree = false;
-  let parentDepth = null;
-  for (const row of rows) {
-    const nameCell = row.querySelector('.col-name');
-    if (!nameCell) continue;
-    if (nameCell.querySelector(`[data-idx="${idx}"]`)) {
-      inSubtree = true;
-      parentDepth = (nameCell.textContent.match(/\u2003/g) || []).length;
-      continue;
-    }
-    if (inSubtree) {
-      const depth = (nameCell.textContent.match(/\u2003/g) || []).length;
-      if (depth <= parentDepth) {
-        inSubtree = false;
-        continue;
-      }
-      row.style.display = expanded ? 'none' : '';
-    }
-  }
+function toggleTree(path) {
+  if (treeExpanded.has(path)) treeExpanded.delete(path);
+  else treeExpanded.add(path);
+  renderItems();
 }
 
 // --- Global Asset Search ---
