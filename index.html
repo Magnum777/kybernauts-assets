@@ -1149,20 +1149,32 @@ function openGlobalSearch() {
   document.getElementById('global-overlay').classList.add('active');
   document.body.style.overflow = 'hidden';
   document.getElementById('global-search-input').focus();
-  // Build flat list of all items with location context
   if (!data || !data.locations) return;
   globalItems = [];
-  data.locations.forEach(loc => {
-    loc.items.forEach(item => {
+  // Recursively walk tree to get ALL items including nested
+  function walkItems(items, loc, prefix) {
+    for (const item of items) {
       globalItems.push({
-        ...item,
+        name: item.name,
+        group: item.group,
+        category: item.category,
+        count: item.count,
+        value: item.value,
+        totalValue: item.totalValue,
+        tech: item.tech,
+        typeId: item.typeId,
         location: loc.name,
         system: loc.system,
         region: loc.region || 'Unknown',
-        security: loc.security
+        security: loc.security,
+        container: prefix || '-'
       });
-    });
-  });
+      if (item.children && item.children.length) {
+        walkItems(item.children, loc, prefix ? `${prefix} → ${item.name}` : item.name);
+      }
+    }
+  }
+  data.locations.forEach(loc => walkItems(loc.items, loc, ''));
   renderGlobalResults();
 }
 
