@@ -447,12 +447,63 @@
   .tech-faction { color: #9b59b6; font-weight: bold; }
   .tech-storyline { color: #e67e22; font-weight: bold; }
 
-  .no-results {
-    padding: 60px;
-    text-align: center;
-    color: #666;
-    font-size: 16px;
+  .global-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 500;
+    overflow-y: auto;
   }
+  .global-overlay.active { display: block; }
+  .global-panel {
+    max-width: 1400px;
+    margin: 20px auto;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    min-height: calc(100vh - 40px);
+  }
+  .global-header {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f23);
+    padding: 20px;
+    border-bottom: 2px solid #e67e22;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .global-header h2 { color: #f39c12; }
+  .global-search-box {
+    padding: 20px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .global-search-box input {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ddd;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 14px;
+    min-width: 300px;
+  }
+  .global-search-box input::placeholder { color: #666; }
+  .global-stats {
+    color: #888;
+    font-size: 13px;
+  }
+  .global-results {
+    padding: 20px;
+  }
+  .global-results .items-table .col-name { width: 28%; }
+  .global-results .items-table .col-location { width: 22%; }
+  .global-results .items-table .col-region { width: 12%; }
+  .global-results .items-table .col-group { width: 12%; }
+  .global-results .items-table .col-count { width: 8%; }
+  .global-results .items-table .col-total { width: 18%; }
 
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-track { background: #111; }
@@ -472,6 +523,7 @@
 
 <div class="header">
   <button class="log-btn" onclick="showLogs()">🔒 Logs</button>
+  <button class="log-btn" style="right:90px;" onclick="openGlobalSearch()">🔍 Search Assets</button>
   <div class="header-layout">
     <div class="header-main">
       <h1>🗺️ EVE Assets Viewer</h1>
@@ -574,6 +626,35 @@
           </tr>
         </thead>
         <tbody id="items-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Global Asset Search -->
+<div id="global-overlay" class="global-overlay">
+  <div class="global-panel">
+    <div class="global-header">
+      <h2>🔍 Global Asset Search</h2>
+      <button class="back-btn" onclick="closeGlobalSearch()">← Back to Map</button>
+    </div>
+    <div class="global-search-box">
+      <input type="text" id="global-search-input" placeholder="Search all assets across all regions..." autofocus>
+      <div class="global-stats" id="global-stats"></div>
+    </div>
+    <div class="global-results">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th class="col-name" onclick="sortGlobal('name')">Name ↕</th>
+            <th class="col-location" onclick="sortGlobal('location')">Location ↕</th>
+            <th class="col-region" onclick="sortGlobal('region')">Region ↕</th>
+            <th class="col-group" onclick="sortGlobal('group')">Group ↕</th>
+            <th class="col-count" onclick="sortGlobal('count')">Count ↕</th>
+            <th class="col-total" onclick="sortGlobal('totalValue')">Total Value ↕</th>
+          </tr>
+        </thead>
+        <tbody id="global-body"></tbody>
       </table>
     </div>
   </div>
@@ -973,13 +1054,114 @@ function renderItems() {
   });
 }
 
-document.getElementById('search-input').addEventListener('input', renderMap);
-document.getElementById('security-filter').addEventListener('change', renderMap);
-document.getElementById('sort-by').addEventListener('change', renderMap);
-document.getElementById('detail-search').addEventListener('input', renderItems);
-document.getElementById('detail-tech-filter').addEventListener('change', renderItems);
-document.getElementById('detail-category-filter').addEventListener('change', renderItems);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+// --- Global Asset Search ---
+let globalItems = [];
+let globalSort = { field: 'totalValue', dir: 'desc' };
+
+function openGlobalSearch() {
+  document.getElementById('global-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('global-search-input').focus();
+  // Build flat list of all items with location context
+  if (!data || !data.locations) return;
+  globalItems = [];
+  data.locations.forEach(loc => {
+    loc.items.forEach(item => {
+      globalItems.push({
+        ...item,
+        location: loc.name,
+        system: loc.system,
+        region: loc.region || 'Unknown',
+        security: loc.security
+      });
+    });
+  });
+  renderGlobalResults();
+}
+
+function closeGlobalSearch() {
+  document.getElementById('global-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function sortGlobal(field) {
+  if (globalSort.field === field) globalSort.dir = globalSort.dir === 'asc' ? 'desc' : 'asc';
+  else { globalSort.field = field; globalSort.dir = 'desc'; }
+  renderGlobalResults();
+}
+
+function renderGlobalResults() {
+  const search = document.getElementById('global-search-input').value.toLowerCase();
+  const tbody = document.getElementById('global-body');
+  tbody.innerHTML = '';
+
+  let filtered = globalItems;
+  if (search) {
+    filtered = filtered.filter(i =>
+      i.name.toLowerCase().includes(search) ||
+      i.group.toLowerCase().includes(search) ||
+      i.category.toLowerCase().includes(search) ||
+      i.location.toLowerCase().includes(search) ||
+      i.region.toLowerCase().includes(search) ||
+      i.system.toLowerCase().includes(search)
+    );
+  }
+
+  // Sort
+  const dir = globalSort.dir === 'asc' ? 1 : -1;
+  filtered.sort((a, b) => {
+    let av = a[globalSort.field], bv = b[globalSort.field];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+
+  // Stats
+  const totalValue = filtered.reduce((s, i) => s + i.totalValue, 0);
+  document.getElementById('global-stats').textContent =
+    `${filtered.length.toLocaleString()} results — ${formatIsk(totalValue)} ISK` +
+    (search ? ` (from ${globalItems.length.toLocaleString()} total)` : '');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No assets match your search.</td></tr>';
+    return;
+  }
+
+  // Pagination or just render top 500
+  const toRender = filtered.slice(0, 500);
+  toRender.forEach(item => {
+    const tr = document.createElement('tr');
+    const techClass = item.tech === 'Tech II' ? 'tech-ii' : item.tech === 'Faction' ? 'tech-faction' : item.tech === 'Storyline' ? 'tech-storyline' : '';
+    const secColor = item.security >= 0.5 ? '#2ecc71' : item.security >= 0.1 ? '#f1c40f' : item.security > 0 ? '#e74c3c' : '#e67e22';
+    tr.innerHTML = `
+      <td class="col-name"><span class="${techClass}">${item.name}</span></td>
+      <td class="col-location"><a href="https://evemaps.dotlan.net/system/${encodeURIComponent(item.system)}" target="_blank" style="color:#aaa; text-decoration:none;">${item.location}</a></td>
+      <td class="col-region"><span style="color:${secColor};">●</span> ${item.region}</td>
+      <td class="col-group">${item.group}</td>
+      <td class="col-count count">${item.count.toLocaleString()}</td>
+      <td class="col-total isk">${formatIsk(item.totalValue)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (filtered.length > 500) {
+    const more = document.createElement('tr');
+    more.innerHTML = `<td colspan="6" class="no-results" style="padding:20px;">
+      + ${(filtered.length - 500).toLocaleString()} more results — refine your search to see all
+    </td>`;
+    tbody.appendChild(more);
+  }
+}
+
+document.getElementById('global-search-input').addEventListener('input', renderGlobalResults);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('global-overlay').classList.contains('active')) closeGlobalSearch();
+    else if (document.getElementById('detail-overlay').classList.contains('active')) closeDetail();
+  }
+});
 
 loadData();
 </script>
