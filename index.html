@@ -909,16 +909,18 @@ window.onVaultUnlocked = function(decrypted) {
 };
 
 function getSecurityClass(sec) {
-  if (sec >= 0.5) return 'high';
-  if (sec >= 0.1) return 'low';
-  if (sec >= 0) return 'null';
+  const rounded = Math.ceil(sec * 10) / 10;
+  if (rounded >= 0.5) return 'high';
+  if (rounded >= 0.1) return 'low';
+  if (rounded >= 0) return 'null';
   return 'pochven';
 }
 
 function getSecurityColor(sec) {
-  if (sec >= 0.5) return '#2ecc71';
-  if (sec >= 0.1) return '#f1c40f';
-  if (sec >= 0) return '#e74c3c';
+  const rounded = Math.ceil(sec * 10) / 10;
+  if (rounded >= 0.5) return '#2ecc71';
+  if (rounded >= 0.1) return '#f1c40f';
+  if (rounded >= 0) return '#e74c3c';
   return '#e67e22';
 }
 
