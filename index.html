@@ -443,6 +443,8 @@
   .items-table-container {
     padding: 20px;
     overflow-x: auto;
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
   }
   .items-table {
     width: 100%;
@@ -458,8 +460,11 @@
     border-bottom: 2px solid #333;
     cursor: pointer;
     user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
-  .items-table th:hover { color: #fff; }
+  .items-table th:hover { color: #fff; background: #222; }
   .items-table td {
     padding: 10px 12px;
     border-bottom: 1px solid #1a1a1a;
@@ -538,6 +543,8 @@
   }
   .global-results {
     padding: 20px;
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
   }
   .global-results .items-table .col-name { width: 28%; }
   .global-results .items-table .col-location { width: 22%; }
@@ -985,7 +992,10 @@ function renderMap() {
   });
 }
 
+let scrollY = 0;
+
 function openDetail(loc) {
+  scrollY = window.scrollY;
   document.getElementById('detail-title').textContent = loc.name;
   document.getElementById('detail-meta').innerHTML = `${loc.system} | ${loc.constellation} | ${loc.region} | Sec: ${loc.security.toFixed(1)} — <a href="https://evemaps.dotlan.net/system/${encodeURIComponent(loc.system)}" target="_blank">Dotlan ↗</a>` + (loc.region !== 'Unknown' ? ` | <a href="https://evemaps.dotlan.net/region/${encodeURIComponent(loc.region)}" target="_blank">Region ↗</a>` : '');
   document.getElementById('detail-items').textContent = loc.itemCount.toLocaleString();
@@ -1013,6 +1023,7 @@ function openDetail(loc) {
 function closeDetail() {
   document.getElementById('detail-overlay').classList.remove('active');
   document.body.style.overflow = '';
+  window.scrollTo(0, scrollY);
 }
 
 function sortItems(field, initial) {
@@ -1177,6 +1188,7 @@ let globalItems = [];
 let globalSort = { field: 'totalValue', dir: 'desc' };
 
 function openGlobalSearch() {
+  scrollY = window.scrollY;
   document.getElementById('global-overlay').classList.add('active');
   document.body.style.overflow = 'hidden';
   document.getElementById('global-search-input').focus();
@@ -1212,6 +1224,7 @@ function openGlobalSearch() {
 function closeGlobalSearch() {
   document.getElementById('global-overlay').classList.remove('active');
   document.body.style.overflow = '';
+  window.scrollTo(0, scrollY);
 }
 
 function sortGlobal(field) {
@@ -1321,6 +1334,7 @@ function isShipGroup(group) {
 }
 
 function openStockView() {
+  scrollY = window.scrollY;
   document.getElementById('stock-overlay').classList.add('active');
   document.body.style.overflow = 'hidden';
   document.getElementById('stock-search-input').focus();
@@ -1362,6 +1376,7 @@ function openStockView() {
 function closeStockView() {
   document.getElementById('stock-overlay').classList.remove('active');
   document.body.style.overflow = '';
+  window.scrollTo(0, scrollY);
 }
 
 function sortStock(field) {
