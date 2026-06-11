@@ -1019,7 +1019,13 @@ function renderMap() {
   let locs = data.locations.filter(loc => {
     if (loc.totalValue === 0) return false;
     if (search && !loc.name.toLowerCase().includes(search) && !loc.system.toLowerCase().includes(search) && !loc.region.toLowerCase().includes(search)) return false;
-    if (secFilter !== 'all' && getSecurityClass(loc.security) !== secFilter) return false;
+    if (secFilter !== 'all') {
+      if (secFilter === 'pochven') {
+        if (loc.region !== 'Pochven') return false;
+      } else {
+        if (getSecurityClass(loc.security) !== secFilter) return false;
+      }
+    }
     return true;
   });
 
